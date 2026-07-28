@@ -102,7 +102,7 @@ export function Funnel({ stages, title, subtitle, footer }: {
               </text>
               <text x={xs[i]} y={66} fontSize="11" fill="var(--text-muted)"
                 style={{ fontVariantNumeric: "tabular-nums" }}>
-                {i === 0 ? "100%" : pct(s.value / first, s.value / first < 0.01 ? 2 : 1)} of reach
+                {i === 0 ? "100%" : pct(s.value / first, s.value / first < 0.01 ? 2 : 1)} of impressions
               </text>
             </g>
           ))}
