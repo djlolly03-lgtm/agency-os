@@ -446,6 +446,25 @@ export async function getDivisionMonthly(clientId: string) {
     .map(([month, d]) => ({ month, ...d }));
 }
 
+/**
+ * Manual Google monthlies (Dec 2025 – Apr 2026 have no daily Google rows;
+ * their platform numbers were recorded as monthly manual inputs).
+ */
+export async function getManualGoogleMonth(clientId: string, month: string) {
+  const db = await getDb();
+  const rows = await db.query<{ metric: string; value: number }>(
+    `select metric, value from manual_actuals
+     where client_id = $1 and month = $2 and metric in ('google_spend','google_purchases','google_revenue')`,
+    [clientId, month]);
+  if (!rows.length) return null;
+  const m = new Map(rows.map((r) => [String(r.metric), Number(r.value)]));
+  return {
+    spend: m.get("google_spend") ?? 0,
+    purchases: m.get("google_purchases") ?? 0,
+    revenue: m.get("google_revenue") ?? 0,
+  };
+}
+
 /** Per-ad rollup for an arbitrary range (Meta facts) — used by month-scoped insights. */
 export async function getAdRangeRollups(clientId: string, range: Range) {
   const db = await getDb();

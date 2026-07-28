@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getClientBySlug, getOverview, getTimeseries, getCreatives, getPacing, getDivisionOverview, getMonths,
-  getFunnel, getDailyBlended, getAdRangeRollups, getGoals,
+  getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth,
 } from "@/lib/queries";
 import { Funnel } from "@/components/funnel";
 import { DayHeatmap } from "@/components/day-heatmap";
@@ -71,6 +71,21 @@ export default async function OverviewPage({ params, searchParams }: {
   }), { spend: 0, revenue: 0, purchases: 0, clicks: 0, impressions: 0 });
   const mt = sumRows(monthRows);
   const pv = sumRows(prevRows);
+
+  // Dec 2025 – Apr 2026 have no daily Google rows — their Google numbers are
+  // monthly manual inputs. Fold them in so paid totals are honest platform-wide.
+  const hasGoogleDaily = monthRows.some((r) => r.platform === "google");
+  const manualGoogle = hasGoogleDaily ? null : await getManualGoogleMonth(client.id, selectedMonth);
+  if (manualGoogle) {
+    mt.spend += manualGoogle.spend; mt.revenue += manualGoogle.revenue; mt.purchases += manualGoogle.purchases;
+  }
+  const prevHasGoogleDaily = prevRows.some((r) => r.platform === "google");
+  const prevManualGoogle = prevHasGoogleDaily ? null : await getManualGoogleMonth(client.id, prevMonthStart);
+  if (prevManualGoogle && !isCurrent) {
+    // only fold into prev for complete-month comparisons (manual inputs are monthly)
+    pv.spend += prevManualGoogle.spend; pv.revenue += prevManualGoogle.revenue; pv.purchases += prevManualGoogle.purchases;
+  }
+
   const mtRoas = mt.spend > 0 ? mt.revenue / mt.spend : 0;
   const pvRoas = pv.spend > 0 ? pv.revenue / pv.spend : 0;
   const mtCpa = mt.purchases > 0 ? mt.spend / mt.purchases : 0;
@@ -80,6 +95,9 @@ export default async function OverviewPage({ params, searchParams }: {
   const platformTotals = ["meta", "google"].map((pf) => {
     const rows = monthRows.filter((r) => r.platform === pf);
     const s = sumRows(rows);
+    if (pf === "google" && manualGoogle) {
+      s.spend += manualGoogle.spend; s.revenue += manualGoogle.revenue; s.purchases += manualGoogle.purchases;
+    }
     return { platform: pf, spend: s.spend, revenue: s.revenue, roas: s.spend > 0 ? s.revenue / s.spend : 0 };
   }).filter((p) => p.spend > 0);
   const monthSpendTotal = mt.spend || 1;
@@ -129,9 +147,10 @@ export default async function OverviewPage({ params, searchParams }: {
           <div className="mt-6 grid gap-8 md:grid-cols-3">
             {([
               {
-                label: `Revenue · ${periodLabel}`, value: mt.revenue, format: "inr-compact" as const, suffix: "",
+                label: `Paid revenue · ${periodLabel}`, value: mt.revenue, format: "inr-compact" as const, suffix: "",
                 delta: pv.revenue > 0 ? mt.revenue / pv.revenue - 1 : null,
-                sub: `${num(mt.purchases)} orders · AOV ${inr(mtAov)}`,
+                sub: `${num(mt.purchases)} orders · AOV ${inr(mtAov)}`
+                  + (!dv.onlineIsTracked ? ` · store total ${inrCompact(dv.onlineRevenueMtd)}` : ""),
                 spark: sparkRevenue, stroke: "var(--brand)", id: "rev",
               },
               {
@@ -143,7 +162,8 @@ export default async function OverviewPage({ params, searchParams }: {
               {
                 label: `Spend · ${periodLabel}`, value: mt.spend, format: "inr-compact" as const, suffix: "",
                 delta: null,
-                sub: platformTotals.map((p) => `${p.platform === "meta" ? "Meta" : "Google"} ${pct(p.spend / monthSpendTotal, 0)}`).join(" · ") || "—",
+                sub: (platformTotals.map((p) => `${p.platform === "meta" ? "Meta" : "Google"} ${pct(p.spend / monthSpendTotal, 0)}`).join(" · ") || "—")
+                  + (manualGoogle ? " · Google from monthly report" : ""),
                 spark: sparkSpend, stroke: "var(--brand-accent)", id: "spend",
               },
             ]).map((h) => (
