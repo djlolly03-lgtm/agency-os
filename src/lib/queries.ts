@@ -465,6 +465,39 @@ export async function getManualGoogleMonth(clientId: string, month: string) {
   };
 }
 
+/**
+ * Monthly name-level rollups (campaign + ad names preserved) across all
+ * history — Meta at ad grain, Google at campaign grain. Feeds the seasonal
+ * produce classifier.
+ */
+export async function getMonthlyNameRollups(clientId: string) {
+  const db = await getDb();
+  const meta = await db.query(
+    `select to_char(date_trunc('month', f.day), 'YYYY-MM-01') as month,
+            ca.name as campaign, a.name as ad,
+            sum(f.spend) spend, sum(f.revenue) revenue, sum(f.purchases) purchases
+     from fact_ad_daily f
+     join ads a on a.id = f.ad_id
+     join ad_sets s on s.id = a.ad_set_id
+     join campaigns ca on ca.id = s.campaign_id
+     join ad_accounts aa on aa.id = ca.ad_account_id
+     where aa.client_id = $1
+     group by 1, ca.name, a.name`, [clientId]);
+  const google = await db.query(
+    `select to_char(date_trunc('month', f.day), 'YYYY-MM-01') as month,
+            ca.name as campaign, null as ad,
+            sum(f.spend) spend, sum(f.conv_value) revenue, sum(f.conversions) purchases
+     from fact_campaign_daily f
+     join campaigns ca on ca.id = f.campaign_id
+     join ad_accounts aa on aa.id = ca.ad_account_id
+     where aa.client_id = $1
+     group by 1, ca.name`, [clientId]);
+  return [...meta, ...google].map((r) => ({
+    month: String(r.month), campaign: String(r.campaign), ad: r.ad ? String(r.ad) : null,
+    spend: N(r.spend), revenue: N(r.revenue), purchases: N(r.purchases),
+  }));
+}
+
 /** Per-ad rollup for an arbitrary range (Meta facts) — used by month-scoped insights. */
 export async function getAdRangeRollups(clientId: string, range: Range) {
   const db = await getDb();

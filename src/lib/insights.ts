@@ -6,10 +6,12 @@
  * appear when viewing the current month.
  */
 import type { CreativeRollup, PacingMetric } from "./queries";
+import type { ProduceMonthAgg } from "./seasons";
+import { seasonLabel } from "./seasons";
 
 export interface InsightMathStep { label: string; value: string }
 
-export type InsightIcon = "flame" | "trend-down" | "trend-up" | "zap" | "gem" | "target" | "check";
+export type InsightIcon = "flame" | "trend-down" | "trend-up" | "zap" | "gem" | "target" | "check" | "sun" | "leaf";
 
 export interface Insight {
   icon: InsightIcon;
@@ -48,6 +50,8 @@ export interface MonthInsightInput {
   // current-month-only operational state:
   creatives?: CreativeRollup[];
   pacing?: PacingMetric[];
+  /** seasonal produce radar for the selected month */
+  seasonal?: { closing: ProduceMonthAgg[]; missed: ProduceMonthAgg[]; offSeason: ProduceMonthAgg[] };
 }
 
 export function computeInsights(input: MonthInsightInput): Insight[] {
@@ -162,6 +166,63 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     }
   }
 
+  // ---- seasonal intelligence ----
+  if (input.seasonal) {
+    const { closing, missed, offSeason } = input.seasonal;
+    if (closing.length) {
+      const c = closing[0];
+      const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+      out.push({
+        icon: "sun",
+        category: `Season closing · ${monthLabel}`,
+        metric: c.produce.label,
+        text: `window shuts after ${monthLabel} — ${compact(c.revenue)} so far${roas > 0 ? ` at ${roas.toFixed(2)}×` : ""}. Last call to push${closing.length > 1 ? ` (+${closing.length - 1} more closing)` : ""}.`,
+        tone: "warn",
+        math: {
+          steps: [
+            { label: `${c.produce.label} season (India)`, value: seasonLabel(c.produce) },
+            { label: `Revenue this month`, value: compact(c.revenue) },
+            { label: `Spend this month`, value: compact(c.spend) },
+            ...(closing.length > 1 ? closing.slice(1, 4).map((x) => ({ label: `Also closing: ${x.produce.label}`, value: seasonLabel(x.produce) })) : []),
+          ],
+          formula: `closing = in season this month AND out of season next month`,
+          note: "Season windows are India-market estimates, editable in src/lib/seasons.ts.",
+        },
+        link: { href: `/${slug}/creatives?q=${encodeURIComponent(c.produce.label.split(" ")[0].toLowerCase())}`, label: `See ${c.produce.label} creatives →` },
+      });
+    }
+    if (missed.length) {
+      out.push({
+        icon: "leaf",
+        category: `Open windows · ${monthLabel}`,
+        metric: String(missed.length),
+        text: `in-season item${missed.length > 1 ? "s" : ""} with zero spend — ${missed.slice(0, 3).map((m) => m.produce.label).join(", ")}${missed.length > 3 ? "…" : ""}. Nature is shipping; we aren't selling.`,
+        tone: "ai",
+        math: {
+          steps: missed.slice(0, 5).map((m) => ({ label: m.produce.label, value: `${seasonLabel(m.produce)} · ₹0 spend this month` })),
+          formula: `missed = in season this month AND spend = 0 AND sold historically`,
+          note: "Only items Organik Truck has sold before are flagged.",
+        },
+        link: { href: `/${slug}/creatives`, label: "Plan creatives →" },
+      });
+    }
+    const offSpend = offSeason.reduce((s2, x) => s2 + x.spend, 0);
+    if (offSeason.length && offSpend >= 1000) {
+      out.push({
+        icon: "trend-down",
+        category: `Fighting the calendar · ${monthLabel}`,
+        metric: compact(offSpend),
+        text: `spent on out-of-season produce — ${offSeason.slice(0, 3).map((m) => m.produce.label).join(", ")}. Expect thinner supply and softer demand.`,
+        tone: "warn",
+        math: {
+          steps: offSeason.slice(0, 5).map((m) => ({ label: m.produce.label, value: `${compact(m.spend)} spend · season ${seasonLabel(m.produce)}` })),
+          formula: `off-season spend = Σ spend on items whose season excludes ${monthLabel}`,
+        },
+        link: { href: `/${slug}/campaigns?range=mtd`, label: "Review campaigns →" },
+      });
+    }
+  }
+
   if (input.isCurrentMonth) {
     out.push(...currentMonthInsights(input));
   } else if (input.goal && input.goal.target > 0) {
@@ -187,7 +248,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     });
   }
 
-  return out.slice(0, 6);
+  return out.slice(0, 8);
 }
 
 /** Operational "act now" insights — only meaningful for the current month. */

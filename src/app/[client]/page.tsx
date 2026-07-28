@@ -2,8 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getClientBySlug, getOverview, getTimeseries, getCreatives, getPacing, getDivisionOverview, getMonths,
-  getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth,
+  getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
 } from "@/lib/queries";
+import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar, buildSeasonCalendar } from "@/lib/seasons";
+import { SeasonRadar } from "@/components/season-radar";
+import { SeasonCalendar } from "@/components/season-calendar";
 import { Funnel } from "@/components/funnel";
 import { DayHeatmap } from "@/components/day-heatmap";
 import { computeInsights } from "@/lib/insights";
@@ -40,7 +43,7 @@ export default async function OverviewPage({ params, searchParams }: {
   const prevMonthEnd = new Date(Date.UTC(
     Number(selectedMonth.slice(0, 4)), Number(selectedMonth.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10);
 
-  const [ov, daily, weekly, monthly, creatives, pacing, dv, heatDays, goalRows] = await Promise.all([
+  const [ov, daily, weekly, monthly, creatives, pacing, dv, heatDays, goalRows, nameRollups] = await Promise.all([
     getOverview(client.id),
     getTimeseries(client.id, "day"),
     getTimeseries(client.id, "week"),
@@ -50,6 +53,7 @@ export default async function OverviewPage({ params, searchParams }: {
     getDivisionOverview(client.id, selectedMonth),
     getDailyBlended(client.id, 91),
     getGoals(client.id, selectedMonth),
+    getMonthlyNameRollups(client.id),
   ]);
   const rangeEnd = monthEnd < dv.asOf ? monthEnd : dv.asOf;
   const funnel = await getFunnel(client.id, { from: selectedMonth, to: rangeEnd });
@@ -121,11 +125,23 @@ export default async function OverviewPage({ params, searchParams }: {
     ? { target: Number(explicitGoal.target), isDefault: false }
     : pv.revenue > 0 ? { target: pv.revenue * 1.25, isDefault: true } : null;
 
+  // ---- seasonal intelligence ----
+  const monthNum = Number(selectedMonth.slice(5, 7));
+  const monthNameRows = nameRollups.filter((r) => r.month === selectedMonth);
+  const produceAgg = aggregateProduceMonth(monthNameRows, monthNum);
+  const historicalKeys = new Set(
+    nameRollups.map((r) => classifyProduce(r.campaign, r.ad)?.key).filter(Boolean) as string[]);
+  const radar = seasonRadar(produceAgg, monthNum, historicalKeys);
+  const monthsAsc = [...months].sort();
+  const seasonCal = buildSeasonCalendar(nameRollups, monthsAsc);
+  const inSeasonNow = PRODUCE.filter((pr) => pr.months.length < 12 && inSeason(pr, monthNum) && historicalKeys.has(pr.key));
+
   const insights = computeInsights({
     slug, monthLabel: periodLabel, isCurrentMonth: isCurrent, monthParam,
     monthDaily, platformTotals, adRollups, goal, monthRevenue: mt.revenue,
     creatives: isCurrent ? creatives : undefined,
     pacing: isCurrent ? pacing.metrics : undefined,
+    seasonal: { closing: radar.closing, missed: radar.missed, offSeason: radar.offSeason },
   });
 
   const top = creatives.filter((c) => c.active && (c.status === "winner" || c.status === "hidden_gem"))
@@ -145,6 +161,13 @@ export default async function OverviewPage({ params, searchParams }: {
             </p>
             <MonthPicker months={months} selected={selectedMonth} basePath={`/${slug}`} />
           </div>
+          {inSeasonNow.length > 0 && (
+            <p className="mt-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+              <span className="font-semibold" style={{ color: "var(--brand)" }}>In season:</span>{" "}
+              {inSeasonNow.slice(0, 6).map((pr) => pr.label).join(" · ")}
+              {inSeasonNow.length > 6 ? ` +${inSeasonNow.length - 6} more` : ""}
+            </p>
+          )}
           <div className="mt-6 grid gap-8 md:grid-cols-3">
             {([
               {
@@ -225,6 +248,18 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== 3–4. Hero & loser campaigns ===== */}
       <FadeIn delay={0.05}>
         <HeroLoserCards hero={dv.hero} loser={dv.loser} slug={slug} periodLabel={periodLabel} />
+      </FadeIn>
+
+      {/* ===== Seasons ===== */}
+      <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="Seasons" title="Selling what nature ships"
+          meta="produce windows vs actual sales · India seasons" />
+      </FadeIn>
+      <FadeIn delay={0.05}>
+        <SeasonRadar riding={radar.riding} missed={radar.missed} offSeason={radar.offSeason} />
+      </FadeIn>
+      <FadeIn delay={0.05}>
+        <SeasonCalendar rows={seasonCal} months={monthsAsc} />
       </FadeIn>
 
       {/* ===== Conversion funnel ===== */}

@@ -10,6 +10,7 @@ import { FadeIn } from "@/components/motion";
 import { CreativeDailyChart } from "@/components/creative-daily-chart";
 import { DIVISION_LABEL } from "@/components/division-section";
 import { DataTrail } from "@/components/data-trail";
+import { classifyProduce, inSeason, atPeak, seasonLabel } from "@/lib/seasons";
 
 /** Campaign drill-down: KPIs → funnel → daily trend → ad sets → ads. */
 export default async function CampaignDetail({ params }: {
@@ -38,6 +39,8 @@ export default async function CampaignDetail({ params }: {
   }), { spend: 0, revenue: 0, purchases: 0, clicks: 0, impressions: 0 });
   const roas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
   const division = inferDivision(campaign.name);
+  const produce = classifyProduce(campaign.name);
+  const nowMonth = Number(today.slice(5, 7));
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,7 +55,17 @@ export default async function CampaignDetail({ params }: {
           : "Google daily export · campaign-level · Sheets → Supabase"}
       />
       <div>
-        <h2 className="mt-1 text-lg font-semibold">{campaign.name}</h2>
+        <div className="mt-1 flex flex-wrap items-center gap-2.5">
+          <h2 className="text-lg font-semibold">{campaign.name}</h2>
+          {produce && produce.months.length < 12 && (
+            <span className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={inSeason(produce, nowMonth)
+                ? { background: "color-mix(in srgb, var(--status-good) 16%, transparent)", color: "var(--status-good)" }
+                : { background: "color-mix(in srgb, var(--status-serious) 16%, transparent)", color: "var(--status-serious)" }}>
+              {produce.label} · {inSeason(produce, nowMonth) ? (atPeak(produce, nowMonth) ? "peak season" : "in season") : "out of season"} · {seasonLabel(produce)}
+            </span>
+          )}
+        </div>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
           {campaign.platform === "meta" ? "Meta" : "Google"} ·{" "}
           <Link href={`/${slug}/divisions/${division}`} className="underline">{DIVISION_LABEL[division]}</Link>

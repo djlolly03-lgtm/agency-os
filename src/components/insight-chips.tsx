@@ -4,14 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Flame, TrendingDown, TrendingUp, Zap, Gem, Target, CheckCircle2, ChevronDown,
+  Flame, TrendingDown, TrendingUp, Zap, Gem, Target, CheckCircle2, ChevronDown, Sun, Sprout,
 } from "lucide-react";
 import type { Insight, InsightIcon } from "@/lib/insights";
 import { TONE_COLOR } from "@/lib/insights";
 
 const ICONS: Record<InsightIcon, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
   flame: Flame, "trend-down": TrendingDown, "trend-up": TrendingUp,
-  zap: Zap, gem: Gem, target: Target, check: CheckCircle2,
+  zap: Zap, gem: Gem, target: Target, check: CheckCircle2, sun: Sun, leaf: Sprout,
 };
 
 /**
