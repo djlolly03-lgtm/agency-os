@@ -60,13 +60,13 @@ export function PacingCard({ asOf, metrics }: { asOf: string; metrics: PacingMet
                   )}
                 </div>
                 {/* expected-by-today tick */}
-                <div className="absolute top-[-4px] h-[calc(100%+8px)] w-[2.5px] rounded-full"
-                  style={{ left: `${expectedPct * 100}%`, background: "var(--text-primary)", opacity: 0.7 }}
+                <div className="absolute top-0 h-full w-[2px]"
+                  style={{ left: `min(${(expectedPct * 100).toFixed(1)}%, calc(100% - 2px))`, background: "var(--text-primary)", opacity: 0.6 }}
                   title="expected by today" />
                 {/* projected marker */}
                 <div className="absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rotate-45 rounded-[2px] border-2"
                   style={{
-                    left: `calc(${Math.min(100, (m.projected / m.goal) * 100)}% - 5px)`,
+                    left: `min(calc(${Math.min(100, (m.projected / m.goal) * 100).toFixed(1)}% - 5px), calc(100% - 12px))`,
                     borderColor: projShort && m.metric !== "spend" ? "var(--status-critical)" : "var(--text-secondary)",
                     background: "var(--surface-1)",
                   }}
