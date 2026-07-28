@@ -1,0 +1,302 @@
+/**
+ * Insights engine: interprets the numbers instead of just displaying them.
+ * Deterministic and explainable — every insight carries its derivation
+ * (inputs → formula → result). All insights are scoped to the SELECTED
+ * month; operational "act now" insights (gems, fatigue, pacing) only
+ * appear when viewing the current month.
+ */
+import type { CreativeRollup, PacingMetric } from "./queries";
+
+export interface InsightMathStep { label: string; value: string }
+
+export type InsightIcon = "flame" | "trend-down" | "trend-up" | "zap" | "gem" | "target" | "check";
+
+export interface Insight {
+  icon: InsightIcon;
+  category: string;               // small uppercase kicker, e.g. "CREATIVE WINNER"
+  metric: string;                 // the big stat headline, e.g. "+82%"
+  text: string;
+  tone: "win" | "warn" | "risk" | "info" | "ai";
+  math: {
+    steps: InsightMathStep[];
+    formula: string;
+    note?: string;
+  };
+  link?: { href: string; label: string };
+}
+
+const inr = (v: number) => `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(v))}`;
+const compact = (v: number) => {
+  const a = Math.abs(v);
+  return a >= 1_00_00_000 ? `₹${(v / 1_00_00_000).toFixed(2)} Cr` : a >= 1_00_000 ? `₹${(v / 1_00_000).toFixed(1)} L` : a >= 1_000 ? `₹${(v / 1_000).toFixed(1)}k` : inr(v);
+};
+
+export interface MonthInsightInput {
+  slug: string;
+  monthLabel: string;                       // "Nov 2025" / "MTD"
+  isCurrentMonth: boolean;
+  monthParam: string;                       // "2025-11"
+  /** blended per-day totals within the selected month, ascending */
+  monthDaily: Array<{ day: string; spend: number; purchases: number; revenue: number }>;
+  /** platform totals within the selected month */
+  platformTotals: Array<{ platform: string; spend: number; revenue: number; roas: number }>;
+  /** per-ad rollups within the selected month (Meta) */
+  adRollups: Array<{ ad_id: string; ad_name: string; campaign: string; spend: number; revenue: number; purchases: number }>;
+  /** goal for the month (explicit or default) + actual revenue — for attainment/pacing */
+  goal: { target: number; isDefault: boolean } | null;
+  monthRevenue: number;
+  // current-month-only operational state:
+  creatives?: CreativeRollup[];
+  pacing?: PacingMetric[];
+}
+
+export function computeInsights(input: MonthInsightInput): Insight[] {
+  const out: Insight[] = [];
+  const { slug, monthLabel, isCurrentMonth, monthParam, monthDaily, platformTotals, adRollups } = input;
+
+  // month baseline over Meta ads
+  const mSpend = adRollups.reduce((s, a) => s + a.spend, 0);
+  const mRev = adRollups.reduce((s, a) => s + a.revenue, 0);
+  const baseRoas = mSpend > 0 ? mRev / mSpend : 0;
+
+  // ---- 1. creative winner of the month ----
+  const floor = Math.max(2000, mSpend * 0.02);
+  const stars = adRollups.filter((a) => a.spend >= floor)
+    .map((a) => ({ a, roas: a.revenue / a.spend }))
+    .sort((x, y) => y.roas - x.roas);
+  if (stars.length && baseRoas > 0 && stars[0].roas > baseRoas * 1.3) {
+    const s = stars[0];
+    const overBy = Math.round((s.roas / baseRoas - 1) * 100);
+    out.push({
+      icon: "flame",
+      category: `Creative winner · ${monthLabel}`,
+      metric: `+${overBy}%`,
+      text: `“${truncate(s.a.ad_name)}” beat the account average — ${s.roas.toFixed(2)}× ROAS on ${compact(s.a.spend)}.`,
+      tone: "win",
+      math: {
+        steps: [
+          { label: `Creative spend (${monthLabel})`, value: compact(s.a.spend) },
+          { label: `Creative revenue (${monthLabel})`, value: compact(s.a.revenue) },
+          { label: "Creative ROAS = revenue ÷ spend", value: `${s.roas.toFixed(2)}×` },
+          { label: `Account Meta spend (${monthLabel})`, value: compact(mSpend) },
+          { label: `Account Meta revenue (${monthLabel})`, value: compact(mRev) },
+          { label: "Account ROAS = revenue ÷ spend", value: `${baseRoas.toFixed(2)}×` },
+        ],
+        formula: `outperformance = ${s.roas.toFixed(2)} ÷ ${baseRoas.toFixed(2)} − 1 = +${overBy}%`,
+        note: `Spend floor ${compact(floor)} so tiny tests can't top the list. Meta ads only (Google has no ad-level data).`,
+      },
+      link: { href: `/${slug}/creatives/${s.a.ad_id}`, label: "Open this creative →" },
+    });
+  }
+
+  // ---- 2. CPA trend within the month: last 5 data days vs prior 5 ----
+  if (monthDaily.length >= 10) {
+    const recent5 = monthDaily.slice(-5), prior5 = monthDaily.slice(-10, -5);
+    const agg = (xs: typeof monthDaily) => ({
+      spend: xs.reduce((a, x) => a + x.spend, 0),
+      purchases: xs.reduce((a, x) => a + x.purchases, 0),
+    });
+    const r = agg(recent5), p = agg(prior5);
+    if (r.purchases > 0 && p.purchases > 0) {
+      const recent = r.spend / r.purchases, prior = p.spend / p.purchases;
+      const deltaPct = (recent / prior - 1) * 100;
+      if (Math.abs(deltaPct) >= 12) {
+        const up = deltaPct > 0;
+        const range = (xs: typeof monthDaily) => `${xs[0].day.slice(5)} → ${xs[xs.length - 1].day.slice(5)}`;
+        out.push({
+          icon: up ? "trend-up" : "trend-down",
+          category: `CPA trend · ${monthLabel}`,
+          metric: `${up ? "+" : "−"}${Math.round(Math.abs(deltaPct))}%`,
+          text: up
+            ? `Cost per order rose to ${inr(recent)} in the last 5 days of the period (was ${inr(prior)}).`
+            : `Cost per order dropped to ${inr(recent)} in the last 5 days of the period (was ${inr(prior)}).`,
+          tone: up ? "warn" : "win",
+          math: {
+            steps: [
+              { label: `Spend, last 5 days (${range(recent5)})`, value: compact(r.spend) },
+              { label: "Orders, last 5 days", value: String(Math.round(r.purchases)) },
+              { label: "CPA recent = spend ÷ orders", value: inr(recent) },
+              { label: `Spend, prior 5 days (${range(prior5)})`, value: compact(p.spend) },
+              { label: "Orders, prior 5 days", value: String(Math.round(p.purchases)) },
+              { label: "CPA prior = spend ÷ orders", value: inr(prior) },
+            ],
+            formula: `change = ${inr(recent)} ÷ ${inr(prior)} − 1 = ${deltaPct > 0 ? "+" : ""}${Math.round(deltaPct)}%`,
+            note: "Blended Meta + Google, platform-attributed orders.",
+          },
+          link: { href: `/${slug}/campaigns?from=${recent5[0].day}&to=${recent5[4].day}`, label: "See those 5 days →" },
+        });
+      }
+    }
+  }
+
+  // ---- 3. platform gap within the month ----
+  const meta = platformTotals.find((p) => p.platform === "meta");
+  const google = platformTotals.find((p) => p.platform === "google");
+  if (meta && google && meta.spend > 0 && google.spend > 0) {
+    const gap = google.roas / Math.max(meta.roas, 0.01) - 1;
+    if (Math.abs(gap) >= 0.15) {
+      const googleBetter = gap > 0;
+      const pctGap = Math.round(Math.abs(gap) * 100);
+      out.push({
+        icon: "zap",
+        category: `Platform mix · ${monthLabel}`,
+        metric: `+${pctGap}%`,
+        text: `${googleBetter ? "Google" : "Meta"} outperformed ${googleBetter ? "Meta" : "Google"} on ROAS (${(googleBetter ? google : meta).roas.toFixed(2)}× vs ${(googleBetter ? meta : google).roas.toFixed(2)}×).`,
+        tone: "info",
+        math: {
+          steps: [
+            { label: `Meta spend (${monthLabel})`, value: compact(meta.spend) },
+            { label: `Meta revenue (${monthLabel})`, value: compact(meta.revenue) },
+            { label: "Meta ROAS", value: `${meta.roas.toFixed(2)}×` },
+            { label: `Google spend (${monthLabel})`, value: compact(google.spend) },
+            { label: `Google revenue (${monthLabel})`, value: compact(google.revenue) },
+            { label: "Google ROAS", value: `${google.roas.toFixed(2)}×` },
+          ],
+          formula: googleBetter
+            ? `gap = ${google.roas.toFixed(2)} ÷ ${meta.roas.toFixed(2)} − 1 = +${pctGap}%`
+            : `gap = ${meta.roas.toFixed(2)} ÷ ${google.roas.toFixed(2)} − 1 = +${pctGap}%`,
+          note: "Each platform self-attributes — treat cross-platform comparison directionally.",
+        },
+        link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
+      });
+    }
+  }
+
+  if (input.isCurrentMonth) {
+    out.push(...currentMonthInsights(input));
+  } else if (input.goal && input.goal.target > 0) {
+    // ---- past month: goal attainment ----
+    const att = input.monthRevenue / input.goal.target;
+    out.push({
+      icon: att >= 1 ? "check" : "target",
+      category: `Goal attainment · ${monthLabel}`,
+      metric: `${Math.round(att * 100)}%`,
+      text: att >= 1
+        ? `of the revenue goal was hit — ${compact(input.monthRevenue)} against ${compact(input.goal.target)}.`
+        : `of the revenue goal was reached — ${compact(input.monthRevenue)} against ${compact(input.goal.target)}.`,
+      tone: att >= 1 ? "win" : att >= 0.85 ? "warn" : "risk",
+      math: {
+        steps: [
+          { label: `Goal${input.goal.isDefault ? " (default: prior month +25%)" : ""}`, value: compact(input.goal.target) },
+          { label: `Paid revenue (${monthLabel})`, value: compact(input.monthRevenue) },
+        ],
+        formula: `attainment = ${compact(input.monthRevenue)} ÷ ${compact(input.goal.target)} = ${Math.round(att * 100)}%`,
+        note: input.goal.isDefault ? "No explicit goal was set for this month — default target shown." : undefined,
+      },
+      link: { href: `/${slug}?month=${monthParam}`, label: "This month's overview →" },
+    });
+  }
+
+  return out.slice(0, 6);
+}
+
+/** Operational "act now" insights — only meaningful for the current month. */
+function currentMonthInsights(input: MonthInsightInput): Insight[] {
+  const out: Insight[] = [];
+  const { slug, creatives = [], pacing = [] } = input;
+
+  const active = creatives.filter((c) => c.active && c.window_spend > 0);
+  const winSpend = active.reduce((s, c) => s + c.window_spend, 0);
+  const winRev = active.reduce((s, c) => s + c.window_revenue, 0);
+  const baseRoas = winSpend > 0 ? winRev / winSpend : 0;
+
+  // fatigue exposure
+  const fatiguing = creatives.filter((c) => c.status === "fatiguing");
+  const fatigueSpend = fatiguing.reduce((s, c) => s + c.window_spend, 0);
+  if (fatiguing.length && winSpend > 0 && fatigueSpend / winSpend >= 0.08) {
+    out.push({
+      icon: "trend-down",
+      category: "Creative fatigue · now",
+      metric: `${Math.round((100 * fatigueSpend) / winSpend)}%`,
+      text: `of current spend sits on ${fatiguing.length} fatiguing creative${fatiguing.length > 1 ? "s" : ""} — refresh or rotate.`,
+      tone: "risk",
+      math: {
+        steps: [
+          { label: "Fatiguing = 14d ROAS fell ≥40% vs prior 28d", value: `${fatiguing.length} creatives` },
+          ...fatiguing.slice(0, 4).map((c) => ({
+            label: truncate(c.ad_name, 36),
+            value: `${compact(c.window_spend)} · ROAS fell ${dropPct(c)}%`,
+          })),
+          { label: "Spend on fatiguing creatives (14d)", value: compact(fatigueSpend) },
+          { label: "Total active spend (14d)", value: compact(winSpend) },
+        ],
+        formula: `exposure = ${compact(fatigueSpend)} ÷ ${compact(winSpend)} = ${Math.round((100 * fatigueSpend) / winSpend)}%`,
+      },
+      link: { href: `/${slug}/creatives?status=fatiguing`, label: "See fatiguing creatives →" },
+    });
+  }
+
+  // hidden gems
+  const gems = creatives.filter((c) => c.status === "hidden_gem");
+  if (gems.length) {
+    const top = [...gems].sort((a, b) =>
+      b.window_revenue / Math.max(b.window_spend, 1) - a.window_revenue / Math.max(a.window_spend, 1)).slice(0, 4);
+    out.push({
+      icon: "gem",
+      category: "Scale opportunity · now",
+      metric: String(gems.length),
+      text: `hidden gem${gems.length > 1 ? "s" : ""} running high ROAS on tiny budgets — feed the winners.`,
+      tone: "ai",
+      math: {
+        steps: [
+          { label: "Hidden gem = 14d ROAS ≥ 1.5× account, on <5% of spend", value: `${gems.length} qualify` },
+          { label: "Account ROAS (14d)", value: `${baseRoas.toFixed(2)}×` },
+          ...top.map((c) => ({
+            label: truncate(c.ad_name, 36),
+            value: `${(c.window_revenue / Math.max(c.window_spend, 1)).toFixed(2)}× on ${compact(c.window_spend)}`,
+          })),
+        ],
+        formula: `qualifies if ROAS ≥ 1.5 × ${baseRoas.toFixed(2)} = ${(1.5 * baseRoas).toFixed(2)}× AND spend share < 5%`,
+        note: "High ROAS at low spend often means the algorithm found a pocket — scale carefully.",
+      },
+      link: { href: `/${slug}/creatives?status=hidden_gem`, label: "See hidden gems →" },
+    });
+  }
+
+  // pacing
+  const rev = pacing.find((p) => p.metric === "revenue");
+  if (rev && rev.goal > 0 && (rev.paceRatio < 0.9 || rev.paceRatio >= 1.05)) {
+    const behind = rev.paceRatio < 0.9;
+    out.push({
+      icon: behind ? "target" : "check",
+      category: "Revenue pacing · MTD",
+      metric: `${Math.round((100 * rev.projected) / rev.goal)}%`,
+      text: behind
+        ? `of goal is where this month lands at the current run rate — pacing ${Math.round((1 - rev.paceRatio) * 100)}% behind.`
+        : `of goal projected — pacing ${Math.round((rev.paceRatio - 1) * 100)}% ahead.`,
+      tone: behind ? "risk" : "win",
+      math: {
+        steps: [
+          { label: `Monthly goal${rev.goalIsDefault ? " (default: last month +25%)" : ""}`, value: compact(rev.goal) },
+          { label: "Day of month", value: `${rev.daysElapsed} of ${rev.daysInMonth}` },
+          { label: `Expected by today = goal × ${rev.daysElapsed}/${rev.daysInMonth}`, value: compact(rev.expectedByToday) },
+          { label: "Actual revenue MTD", value: compact(rev.actualMtd) },
+          { label: `Projection = MTD + trailing-7d daily average × ${rev.daysInMonth - rev.daysElapsed} remaining days`, value: compact(rev.projected) },
+        ],
+        formula: `pace = ${compact(rev.actualMtd)} ÷ ${compact(rev.expectedByToday)} = ${Math.round(rev.paceRatio * 100)}%`,
+        note: rev.goalIsDefault ? "No explicit goal set — using last month +25%. Set a real goal on the Internal page." : undefined,
+      },
+      link: { href: `/${slug}/internal`, label: rev.goalIsDefault ? "Set real goals →" : "Adjust goals →" },
+    });
+  }
+
+  return out;
+}
+
+function truncate(s: string, n = 42): string {
+  return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
+}
+
+function dropPct(c: CreativeRollup): number {
+  const winRoas = c.window_spend > 0 ? c.window_revenue / c.window_spend : 0;
+  const priorRoas = c.prior_spend > 0 ? c.prior_revenue / c.prior_spend : 0;
+  return priorRoas > 0 ? Math.round((1 - winRoas / priorRoas) * 100) : 0;
+}
+
+export const TONE_COLOR: Record<Insight["tone"], string> = {
+  win: "var(--status-good)",
+  warn: "var(--status-warning)",
+  risk: "var(--status-critical)",
+  info: "var(--series-1)",
+  ai: "var(--ai)",
+};

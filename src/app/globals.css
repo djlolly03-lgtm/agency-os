@@ -1,26 +1,180 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Agency OS design system v2 — dark-first, premium-SaaS feel.
+   Neutral surfaces; color only when meaningful:
+   teal = brand/positive action · orange = groceries/contrast
+   green = success · amber = warning · red = decline · purple = AI
+   Chart series remain on the validated data-viz palette.
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  /* Organik Truck brand */
+  --brand: #17b39a;
+  --brand-accent: #ef8c33;
+  --ai: #a78bfa;
+
+  --surface-1: #16181a;        /* cards */
+  --surface-2: #1d2023;        /* raised / hover */
+  --page: #0c0d0e;
+  --text-primary: #f5f6f7;
+  --text-secondary: #b3b8bd;
+  --text-muted: #7d838a;
+  --grid: #26292d;
+  --baseline: #34383d;
+  --border-hairline: rgba(255, 255, 255, 0.08);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+
+  --series-1: #3987e5; /* Meta */
+  --series-2: #d95926; /* Google */
+  --series-3: #199e70; /* Organic */
+  --series-4: #c98500;
+  --delta-good: #34c759;
+  --status-good: #34c759;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #ff5f57;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: light;
+    --brand: #108474;
+    --brand-accent: #e67817;
+    --ai: #7c5cd6;
+    --surface-1: #ffffff;
+    --surface-2: #f6f2ea;
+    --page: #fcf6ef;
+    --text-primary: #101214;
+    --text-secondary: #4d5257;
+    --text-muted: #85898e;
+    --grid: #e9e4da;
+    --baseline: #cfc9bd;
+    --border-hairline: rgba(16, 18, 20, 0.08);
+    --shadow-card: 0 1px 2px rgba(16, 18, 20, 0.05), 0 8px 24px -16px rgba(16, 18, 20, 0.18);
+    --shadow-lift: 0 2px 4px rgba(16, 18, 20, 0.06), 0 16px 40px -16px rgba(16, 18, 20, 0.24);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --delta-good: #006300;
+    --status-good: #0ca30c;
+    --status-critical: #d03b3b;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --color-surface: var(--surface-1);
+  --color-page: var(--page);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-muted: var(--text-muted);
+  --color-hairline: var(--border-hairline);
 }
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: 16px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+
+.card-lift:hover {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+  border-color: rgba(23, 179, 154, 0.25);
+}
+
+/* hero band: subtle brand gradient wash */
+.hero-band {
+  background:
+    radial-gradient(1200px 400px at 15% -10%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 60%),
+    radial-gradient(900px 360px at 95% -20%, color-mix(in srgb, var(--brand-accent) 9%, transparent), transparent 55%),
+    var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--surface-1);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-number {
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+/* ---- dark canvas: always-dark stage for hero visuals, both themes ---- */
+.canvas-dark {
+  --surface-1: #141a17;
+  --surface-2: #1b231f;
+  --page: #0d1210;
+  --text-primary: #f2f5f3;
+  --text-secondary: #b9c2bc;
+  --text-muted: #7f8a83;
+  --grid: #232b26;
+  --baseline: #2f3833;
+  --border-hairline: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(900px 300px at 12% -20%, rgba(23, 179, 154, 0.18), transparent 55%),
+    radial-gradient(700px 260px at 90% 120%, rgba(239, 140, 51, 0.10), transparent 55%),
+    linear-gradient(180deg, #101613, #0c110f);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 20px;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---- chunky animated segment bars ---- */
+@keyframes bar-grow {
+  from { width: 0; }
+  to { width: var(--w); }
+}
+.seg-grow {
+  animation: bar-grow 0.9s cubic-bezier(0.21, 0.65, 0.36, 1) forwards;
+}
+
+/* ---- funnel flow ---- */
+@keyframes funnel-piece-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.funnel-piece {
+  opacity: 0;
+  animation: funnel-piece-in 0.55s cubic-bezier(0.21, 0.65, 0.36, 1) forwards;
+}
+.funnel-ribbon { transition: filter 0.2s ease; }
+.funnel-ribbon:hover { filter: brightness(1.18) saturate(1.1); }

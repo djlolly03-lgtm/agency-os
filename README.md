@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agency OS
 
-## Getting Started
+Client-facing performance marketing dashboard + agency operating system.
+Client #1: **Organik Truck**. Design doc: [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
-First, run the development server:
+## Stack
+
+- **Next.js 16** (App Router, TypeScript, Tailwind) + Recharts
+- **Postgres** — [Supabase](https://supabase.com) in production, embedded [PGlite](https://pglite.dev) for local dev (zero setup, persisted to `.pglite/`)
+- Plain SQL migrations in `supabase/migrations/` — run identically on both
+
+## Local dev
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run seed   # loads data/*.csv (workbook export) into local PGlite
+npm run dev    # http://localhost:3000 → /organik-truck
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`data/*.csv` is the one-time export of the original Google Sheet workbook
+(Meta ad-daily facts, Google campaign-daily facts, declared manual monthly
+actuals). The seed is idempotent — re-running never double-counts.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> Local dev caveat: PGlite is single-process. Stop the dev server before
+> running `npm run seed` / `npm run sync` locally, or restart it afterwards.
+> (Not an issue in production — Postgres handles concurrent connections.)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Recurring data (Sheets sync + Drive creatives)
 
-## Learn More
+Copy `.env.example` → `.env` and fill in:
 
-To learn more about Next.js, take a look at the following resources:
+- `GOOGLE_SA_KEY_FILE` (or base64 `GOOGLE_SA_KEY`) — Google Cloud service
+  account with Sheets + Drive read-only; share the sheet AND the creatives
+  folder with its `client_email`
+- `SHEET_ID` — the workbook
+- `DRIVE_FOLDER_ID` — the creatives folder
+- `SYNC_SECRET` — protects `POST /api/v1/sync`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Then: `npm run sync` (sheet → DB) and `npm run index-drive` (Drive files →
+`creative_assets` + auto exact/fuzzy matching). In production the Vercel cron
+(`vercel.json`, every 2h) hits `/api/v1/sync` which does both. Fuzzy matches
+are confirmed and manual links made at `/[client]/internal`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Production (when ready)
 
-## Deploy on Vercel
+1. Create a Supabase project, get the `DATABASE_URL` connection string.
+2. `DATABASE_URL=postgres://… npm run seed` — migrations apply automatically, then data loads.
+3. Deploy to Vercel with `DATABASE_URL`, `GOOGLE_SA_KEY`, `SHEET_ID`, `DRIVE_FOLDER_ID`, `SYNC_SECRET` (+`CRON_SECRET`) set.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+supabase/migrations/   schema (entities, facts, manual actuals, semantic layer)
+scripts/seed.ts        CSV → DB, entity resolution by name, idempotent upserts
+src/lib/db.ts          PGlite (dev) / node-postgres (prod) behind one interface
+src/lib/queries.ts     ALL metric math lives here (mirrors metric_definitions)
+src/app/[client]/      Overview · Creatives · Campaigns · Platforms · Monthly report
+src/app/api/v1/        REST endpoints (same query layer)
+```
+
+## Not yet built (per ARCHITECTURE.md phases)
+
+- Alerts engine, agency health score
+- Auth/RLS client logins (internal page is currently unprotected — add auth before public deploy)
+- AI assistant
