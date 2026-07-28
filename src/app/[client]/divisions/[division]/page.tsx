@@ -8,6 +8,7 @@ import { inr, inrCompact, num, ratio, pct, monthLabel } from "@/lib/format";
 import { MonthPicker } from "@/components/month-picker";
 import { Funnel } from "@/components/funnel";
 import { DIVISION_LABEL, DIVISION_COLOR } from "@/components/division-section";
+import { DataTrail } from "@/components/data-trail";
 
 /** Division drill-down: economics, campaign list, month-on-month trend. */
 export default async function DivisionPage({ params, searchParams }: {
@@ -45,8 +46,11 @@ export default async function DivisionPage({ params, searchParams }: {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <Link href={`/${slug}`} className="text-xs underline" style={{ color: "var(--text-secondary)" }}>← Overview</Link>
-          <div className="mt-1 flex items-center gap-2">
+          <DataTrail
+            crumbs={[{ label: "Overview", href: `/${slug}` }, { label: DIVISION_LABEL[dv] }]}
+            source="Meta + Google daily exports · classified by campaign name"
+          />
+          <div className="mt-2 flex items-center gap-2">
             <span className="h-3.5 w-3.5 rounded-sm" aria-hidden style={{ background: DIVISION_COLOR[dv] }} />
             <h2 className="text-base font-semibold">{DIVISION_LABEL[dv]}</h2>
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>{periodLabel}</span>

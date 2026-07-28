@@ -4,6 +4,7 @@ import { getClientBySlug, getCreatives, getCreativeDaily } from "@/lib/queries";
 import { inr, inrCompact, num, ratio, pct, dayLabel } from "@/lib/format";
 import { StatusChip } from "@/components/status-chip";
 import { CreativeDailyChart } from "@/components/creative-daily-chart";
+import { DataTrail } from "@/components/data-trail";
 
 export default async function CreativeDetail({
   params,
@@ -36,9 +37,14 @@ export default async function CreativeDetail({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link href={`/${slug}/creatives`} className="text-xs underline" style={{ color: "var(--text-secondary)" }}>
-          ← All creatives
-        </Link>
+        <DataTrail
+          crumbs={[
+            { label: "Overview", href: `/${slug}` },
+            { label: "Creatives", href: `/${slug}/creatives` },
+            { label: c.ad_name },
+          ]}
+          source="Meta daily export · ad-level · Sheets → Supabase"
+        />
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <h2 className="text-base font-semibold">{c.ad_name}</h2>
           <StatusChip status={c.status} muted={!c.active} />

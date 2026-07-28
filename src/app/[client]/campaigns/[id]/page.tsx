@@ -9,6 +9,7 @@ import { Funnel } from "@/components/funnel";
 import { FadeIn } from "@/components/motion";
 import { CreativeDailyChart } from "@/components/creative-daily-chart";
 import { DIVISION_LABEL } from "@/components/division-section";
+import { DataTrail } from "@/components/data-trail";
 
 /** Campaign drill-down: KPIs → funnel → daily trend → ad sets → ads. */
 export default async function CampaignDetail({ params }: {
@@ -40,10 +41,17 @@ export default async function CampaignDetail({ params }: {
 
   return (
     <div className="flex flex-col gap-4">
+      <DataTrail
+        crumbs={[
+          { label: "Overview", href: `/${slug}` },
+          { label: "Campaigns", href: `/${slug}/campaigns` },
+          { label: campaign.name },
+        ]}
+        source={campaign.platform === "meta"
+          ? "Meta daily export · ad-level · Sheets → Supabase"
+          : "Google daily export · campaign-level · Sheets → Supabase"}
+      />
       <div>
-        <Link href={`/${slug}/campaigns`} className="text-xs underline" style={{ color: "var(--text-secondary)" }}>
-          ← All campaigns
-        </Link>
         <h2 className="mt-1 text-lg font-semibold">{campaign.name}</h2>
         <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
           {campaign.platform === "meta" ? "Meta" : "Google"} ·{" "}
