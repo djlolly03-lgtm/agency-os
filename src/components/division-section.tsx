@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Trophy, AlertTriangle } from "lucide-react";
 import type { DivisionRollup, CampaignHighlight } from "@/lib/queries";
 import { inr, inrCompact, num, ratio, pct, monthLabel } from "@/lib/format";
 import { SegmentBar } from "@/components/segment-bar";
@@ -141,14 +142,22 @@ export function DivisionCards({ divisions, slug, month, isPartial }: {
 export function HeroLoserCards({ hero, loser, slug, periodLabel }: {
   hero: CampaignHighlight | null; loser: CampaignHighlight | null; slug: string; periodLabel: string;
 }) {
-  const card = (c: CampaignHighlight | null, kind: "hero" | "loser") => (
-    <div className="card p-4" style={kind === "hero"
-      ? { borderColor: "color-mix(in srgb, var(--status-good) 35%, transparent)" }
-      : { borderColor: "color-mix(in srgb, var(--status-critical) 35%, transparent)" }}>
-      <div className="mb-2 flex items-center gap-2">
-        <span aria-hidden>{kind === "hero" ? "🏆" : "🚨"}</span>
-        <h3 className="text-sm font-semibold">{kind === "hero" ? "Hero campaign" : "Loser campaign"} ({periodLabel})</h3>
+  const card = (c: CampaignHighlight | null, kind: "hero" | "loser") => {
+    const color = kind === "hero" ? "var(--status-good)" : "var(--status-critical)";
+    const Icon = kind === "hero" ? Trophy : AlertTriangle;
+    return (
+    <div className="card overflow-hidden" style={{ borderColor: `color-mix(in srgb, ${color} 30%, transparent)` }}>
+      <div className="flex items-center gap-2.5 px-4 py-2.5"
+        style={{ background: `color-mix(in srgb, ${color} 10%, transparent)` }}>
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}>
+          <Icon size={15} strokeWidth={2.4} />
+        </span>
+        <h3 className="text-sm font-bold">{kind === "hero" ? "Hero campaign" : "Loser campaign"}
+          <span className="ml-1.5 font-medium" style={{ color: "var(--text-muted)" }}>{periodLabel}</span>
+        </h3>
       </div>
+      <div className="p-4">
       {c ? (
         <>
           <div className="text-sm font-medium">{c.name}</div>
@@ -157,26 +166,28 @@ export function HeroLoserCards({ hero, loser, slug, periodLabel }: {
           </div>
           <div className="mt-3 grid grid-cols-4 gap-2">
             {([
-              ["Spend", inrCompact(c.spend)],
-              ["Revenue", inrCompact(c.revenue)],
-              ["ROAS", `${ratio(c.roas)}×`],
-              ["CPA", c.purchases > 0 ? inr(c.cpa) : "—"],
-            ] as Array<[string, string]>).map(([label, value]) => (
+              ["Spend", inrCompact(c.spend), false],
+              ["Revenue", inrCompact(c.revenue), false],
+              ["ROAS", `${ratio(c.roas)}×`, true],
+              ["CPA", c.purchases > 0 ? inr(c.cpa) : "—", false],
+            ] as Array<[string, string, boolean]>).map(([label, value, big]) => (
               <div key={label}>
                 <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>{label}</div>
-                <div className="text-sm font-semibold tabular">{value}</div>
+                <div className={big ? "text-xl font-bold tabular" : "text-sm font-semibold tabular"}
+                  style={big ? { color: kind === "hero" ? "var(--status-good)" : "var(--status-critical)" } : undefined}>{value}</div>
               </div>
             ))}
           </div>
-          <Link href={`/${slug}/campaigns/${c.id}`} className="mt-3 inline-block text-xs underline" style={{ color: "var(--text-secondary)" }}>
+          <Link href={`/${slug}/campaigns/${c.id}`} className="mt-3 inline-block text-xs font-medium underline" style={{ color: "var(--brand)" }}>
             {kind === "hero" ? "See campaign detail →" : "Review or pause →"}
           </Link>
         </>
       ) : (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>Not enough spend this month to call it.</p>
       )}
+      </div>
     </div>
-  );
+  ); };
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {card(hero, "hero")}
