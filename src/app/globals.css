@@ -113,15 +113,25 @@ h3 { font-weight: 700; }
   border-color: rgba(23, 179, 154, 0.25);
 }
 
-/* hero band: subtle brand gradient wash */
+/* hero band: layered brand gradient wash with a crisp top highlight */
 .hero-band {
   background:
-    radial-gradient(1200px 400px at 15% -10%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 60%),
-    radial-gradient(900px 360px at 95% -20%, color-mix(in srgb, var(--brand-accent) 9%, transparent), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, #ffffff 55%, transparent), transparent 30%),
+    radial-gradient(1200px 420px at 15% -10%, color-mix(in srgb, var(--brand) 20%, transparent), transparent 62%),
+    radial-gradient(900px 380px at 95% -20%, color-mix(in srgb, var(--brand-accent) 13%, transparent), transparent 58%),
+    radial-gradient(600px 300px at 55% 120%, color-mix(in srgb, var(--brand) 7%, transparent), transparent 60%),
     var(--surface-1);
-  border: 1px solid var(--border-hairline);
+  border: 1px solid color-mix(in srgb, var(--brand) 14%, var(--border-hairline));
   border-radius: 20px;
   box-shadow: var(--shadow-card);
+}
+@media (prefers-color-scheme: dark) {
+  .hero-band {
+    background:
+      radial-gradient(1200px 420px at 15% -10%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 62%),
+      radial-gradient(900px 380px at 95% -20%, color-mix(in srgb, var(--brand-accent) 12%, transparent), transparent 58%),
+      var(--surface-1);
+  }
 }
 
 .chip {
