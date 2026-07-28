@@ -84,7 +84,7 @@ export default async function DivisionPage({ params, searchParams }: {
           <Funnel stages={funnel.stages}
             title={`Conversion funnel — ${periodLabel}`}
             subtitle="Meta attribution"
-            footer={`This flow cost ${inrCompact(funnel.spend)} and returned ${inrCompact(funnel.revenue)} — ${(funnel.spend > 0 ? funnel.revenue / funnel.spend : 0).toFixed(2)}× ROAS`} />
+            footer={`Meta flow: ${inrCompact(funnel.spend)} in → ${inrCompact(funnel.revenue)} out · ${(funnel.spend > 0 ? funnel.revenue / funnel.spend : 0).toFixed(2)}× ROAS on this funnel`} />
         </div>
       )}
 
