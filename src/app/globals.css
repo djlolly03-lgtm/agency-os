@@ -81,10 +81,23 @@ html {
 body {
   background: var(--page);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-ui), system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.011em;
 }
+
+/* Display voice: headings and hero figures get character; numbers stay
+   in Manrope for true tabular alignment. */
+h1, h2, h3, .hero-number, .display {
+  font-family: var(--font-display), var(--font-ui), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+h2 { font-size: 1.15rem; font-weight: 700; }
+h3 { font-weight: 700; }
+.hero-number, .tabular {
+  font-family: var(--font-ui), system-ui, sans-serif; /* tabular digits */
+}
+.hero-number { font-weight: 800; }
 
 .card {
   background: var(--surface-1);
