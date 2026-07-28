@@ -160,6 +160,58 @@ h3 { font-weight: 700; }
   background: color-mix(in srgb, var(--brand) 30%, transparent);
 }
 
+/* ---- narrative act headers: eyebrow + display title outside the cards ---- */
+.act {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 20px;
+}
+.act-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+.act-eyebrow::after {
+  content: "";
+  height: 1px;
+  flex: 0 0 44px;
+  background: color-mix(in srgb, var(--brand) 45%, transparent);
+}
+.act-title {
+  font-family: var(--font-display), var(--font-ui), sans-serif;
+  font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* ---- hero stage: the dark cover of the report ---- */
+.hero-stage {
+  background:
+    radial-gradient(1100px 460px at 12% -15%, rgba(23, 179, 154, 0.34), transparent 60%),
+    radial-gradient(900px 400px at 92% -25%, rgba(239, 140, 51, 0.20), transparent 58%),
+    radial-gradient(700px 340px at 50% 130%, rgba(23, 179, 154, 0.14), transparent 60%),
+    linear-gradient(180deg, #101714, #0a0f0d);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.55), var(--shadow-card);
+}
+
+/* gradient ink for hero figures — loud, glowing, unmistakable */
+.num-gradient {
+  background: linear-gradient(120deg, #ffffff 20%, #7ff0d8 75%, #34d1b2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 18px rgba(23, 179, 154, 0.35));
+}
+
 /* ---- dark canvas: always-dark stage for hero visuals, both themes ---- */
 .canvas-dark {
   --surface-1: #141a17;

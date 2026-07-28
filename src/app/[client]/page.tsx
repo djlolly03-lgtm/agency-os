@@ -17,6 +17,7 @@ import { OnlineOfflineCard, DivisionCards, HeroLoserCards } from "@/components/d
 import { FadeIn, AnimatedNumber } from "@/components/motion";
 import { Sparkline } from "@/components/sparkline";
 import { InsightChips } from "@/components/insight-chips";
+import { SectionHeader } from "@/components/section-header";
 
 export default async function OverviewPage({ params, searchParams }: {
   params: Promise<{ client: string }>;
@@ -135,7 +136,7 @@ export default async function OverviewPage({ params, searchParams }: {
     <div className="flex flex-col gap-4">
       {/* ===== HERO (scoped to selected month) ===== */}
       <FadeIn>
-        <section className="hero-band p-6 md:p-8">
+        <section className="canvas-dark hero-stage p-6 md:p-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               {isCurrent
@@ -183,7 +184,7 @@ export default async function OverviewPage({ params, searchParams }: {
                     </span>
                   )}
                 </div>
-                <div className="hero-number tabular mt-1">
+                <div className="hero-number tabular num-gradient mt-1">
                   <AnimatedNumber value={h.value} format={h.format} />
                   {h.suffix && <span className="text-2xl font-semibold">{h.suffix}</span>}
                 </div>
@@ -199,10 +200,18 @@ export default async function OverviewPage({ params, searchParams }: {
 
       {/* ===== INSIGHTS (scoped to selected month) ===== */}
       <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="Signals" title="What the data is telling us"
+          meta="click any card for the math" />
+      </FadeIn>
+      <FadeIn delay={0.05}>
         <InsightChips insights={insights} />
       </FadeIn>
 
       {/* ===== 1. Online vs offline ===== */}
+      <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="Money flow" title="Where revenue comes from"
+          meta="online vs offline · divisions · best & worst" />
+      </FadeIn>
       <FadeIn delay={0.05}>
         <OnlineOfflineCard month={dv.month} online={dv.onlineRevenueMtd}
           onlineIsTracked={dv.onlineIsTracked} offline={dv.offlineRevenue} href={`/${slug}/monthly`} />
@@ -220,15 +229,24 @@ export default async function OverviewPage({ params, searchParams }: {
 
       {/* ===== Conversion funnel ===== */}
       <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="The funnel" title="From impression to purchase"
+          meta={periodLabel} />
+      </FadeIn>
+      <FadeIn delay={0.05}>
         <div className="canvas-dark p-6">
           <Funnel stages={funnel.stages}
-            title={`Conversion funnel — ${periodLabel}`}
             subtitle="Meta attribution (Google's export has no stage data)"
             footer={`Meta flow: ${inrCompact(funnel.spend)} in → ${inrCompact(funnel.revenue)} out · ${(funnel.spend > 0 ? funnel.revenue / funnel.spend : 0).toFixed(2)}× ROAS on this funnel`} />
         </div>
       </FadeIn>
 
       {/* ===== Current-month operations: pacing + live KPIs ===== */}
+      {isCurrent && (
+        <FadeIn delay={0.05}>
+          <SectionHeader eyebrow="Operations" title="Pace, pulse, and the daily grind"
+            meta="live · current month only" />
+        </FadeIn>
+      )}
       {isCurrent && (
         <FadeIn delay={0.05}>
           <PacingCard asOf={pacing.asOf} metrics={pacing.metrics} />
@@ -265,6 +283,9 @@ export default async function OverviewPage({ params, searchParams }: {
       </FadeIn>
 
       {/* ===== Top creatives (current operational state) ===== */}
+      <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="Creative engine" title="What deserves more budget" meta="live status" />
+      </FadeIn>
       <FadeIn delay={0.05}>
         <div className="card p-5">
           <div className="mb-4 flex items-center justify-between">
