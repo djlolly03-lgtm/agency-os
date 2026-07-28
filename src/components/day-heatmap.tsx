@@ -61,7 +61,7 @@ export function DayHeatmap({ days, slug }: {
       </div>
       <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>Click any day to see its campaign breakdown.</p>
       <div className="overflow-x-auto pb-1">
-        <div className="flex gap-1" style={{ minWidth: weeks.length * 18 }}>
+        <div className="flex gap-1" style={{ minWidth: weeks.length * 23 }}>
           {weeks.map((week, wi) => (
             <div key={wi} className="flex flex-col gap-1">
               <div className="h-3 text-[9px]" style={{ color: "var(--text-muted)" }}>{monthTicks[wi]}</div>
@@ -69,10 +69,10 @@ export function DayHeatmap({ days, slug }: {
                 cell?.data ? (
                   <Link key={di} href={`/${slug}/campaigns?from=${cell.day}&to=${cell.day}`}
                     title={`${cell.day} · spend ${inrCompact(cell.data.spend)} · ROAS ${ratio(cell.data.roas)}×`}
-                    className="block h-3.5 w-3.5 rounded-[4px] transition-transform hover:scale-125"
+                    className="block h-[18px] w-[18px] rounded-[5px] transition-all hover:scale-125 hover:ring-2"
                     style={{ background: bucket(cell.data) }} />
                 ) : (
-                  <span key={di} className="block h-3.5 w-3.5 rounded-[4px]"
+                  <span key={di} className="block h-[18px] w-[18px] rounded-[5px]"
                     style={{ background: cell ? "var(--grid)" : "transparent" }} />
                 )
               )}
