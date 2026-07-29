@@ -1,11 +1,12 @@
 import type { FunnelStage } from "@/lib/queries";
-import { inrCompact, pct } from "@/lib/format";
+import { pct } from "@/lib/format";
 
 /**
- * Flow funnel — one continuous tapering ribbon, drawn in SVG.
- * Curved necks between stages carry conversion pills; the biggest
- * post-click leak is auto-flagged. CSS-animated (no JS/rAF), so it
- * renders correctly in exports, prints and background tabs.
+ * Funnel v3 — "skyline" geometry. Every stage is a tower on a shared
+ * baseline; heights are log-scaled so late stages stay monumental next to
+ * million-scale impressions. Slopes connect the rooflines, so drop-offs
+ * read as cliffs. The worst post-click cliff is flagged in orange.
+ * CSS-animated (no rAF) — renders in exports and background tabs.
  */
 export function Funnel({ stages, title, subtitle, footer }: {
   stages: FunnelStage[]; title?: string; subtitle?: string; footer?: string;
@@ -13,34 +14,38 @@ export function Funnel({ stages, title, subtitle, footer }: {
   const n = stages.length;
   if (n < 2 || stages[0].value <= 0) return null;
 
-  const W = 1000, H = 316;
-  const padX = 78, labelH = 88, flowH = 176;
-  const cy = labelH + flowH / 2;
-  const first = stages[0].value;
-  const xs = stages.map((_, i) => padX + (i * (W - 2 * padX)) / (n - 1));
-  const hs = stages.map((s) => Math.max(10, Math.sqrt(s.value / first) * flowH));
+  const W = 1000, H = 330;
+  const baseline = 282, topPad = 76, barW = 64;
+  const Hmax = baseline - topPad;
+  const xs = stages.map((_, i) => 70 + (i * (W - 140)) / (n - 1));
+
+  const vals = stages.map((s) => Math.max(s.value, 1));
+  const logs = vals.map((v) => Math.log10(v));
+  const lmin = Math.min(...logs), lmax = Math.max(...logs);
+  const hs = logs.map((l) => Hmax * (0.16 + 0.84 * (lmax === lmin ? 1 : (l - lmin) / (lmax - lmin))));
 
   const shortNum = (v: number) =>
     v >= 1_00_000 ? `${(v / 1_00_000).toFixed(1)} L`
       : v >= 1_000 ? `${(v / 1_000).toFixed(1)}k`
       : new Intl.NumberFormat("en-IN").format(Math.round(v));
 
-  // biggest actionable leak = worst step conversion after the click stage
+  // worst post-click step = the actionable cliff
   let leakIdx = -1, leakRate = 1;
   for (let i = 2; i < n; i++) {
     const rate = stages[i - 1].value > 0 ? stages[i].value / stages[i - 1].value : 1;
     if (rate < leakRate) { leakRate = rate; leakIdx = i; }
   }
 
-  const ribbons = stages.slice(0, -1).map((_, i) => {
-    const x1 = xs[i], x2 = xs[i + 1], c = (x1 + x2) / 2;
-    const t1 = cy - hs[i] / 2, b1 = cy + hs[i] / 2;
-    const t2 = cy - hs[i + 1] / 2, b2 = cy + hs[i + 1] / 2;
+  const connectors = stages.slice(0, -1).map((_, i) => {
+    const x1 = xs[i] + barW / 2, x2 = xs[i + 1] - barW / 2;
+    const y1 = baseline - hs[i], y2 = baseline - hs[i + 1];
+    const c = (x1 + x2) / 2;
     return {
-      d: `M ${x1} ${t1} C ${c} ${t1}, ${c} ${t2}, ${x2} ${t2} L ${x2} ${b2} C ${c} ${b2}, ${c} ${b1}, ${x1} ${b1} Z`,
+      d: `M ${x1} ${y1} C ${c} ${y1}, ${c} ${y2}, ${x2} ${y2} L ${x2} ${baseline} L ${x1} ${baseline} Z`,
       cx: c,
+      pillY: Math.min(y1, y2) - 16,
       rate: stages[i].value > 0 ? stages[i + 1].value / stages[i].value : 0,
-      thin: Math.min(hs[i], hs[i + 1]) < 34,
+      isLeak: i + 1 === leakIdx,
     };
   });
 
@@ -49,91 +54,95 @@ export function Funnel({ stages, title, subtitle, footer }: {
       {title && <h3 className="text-sm font-semibold">{title}</h3>}
       {subtitle && <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>{subtitle}</p>}
       <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 w-full" style={{ minWidth: 760 }} role="img"
+        <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 w-full" style={{ minWidth: 780 }} role="img"
           aria-label={stages.map((s) => `${s.label} ${s.value}`).join(", ")}>
           <defs>
-            {ribbons.map((_, i) => (
-              <linearGradient key={i} id={`fr-${i}`} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.22 + (i / (n - 1)) * 0.5} />
-                <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.22 + ((i + 1) / (n - 1)) * 0.5} />
-              </linearGradient>
-            ))}
+            <linearGradient id="fbar" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.95" />
+              <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.35" />
+            </linearGradient>
+            <linearGradient id="fbar-final" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#7ff0d8" />
+              <stop offset="100%" stopColor="var(--brand)" />
+            </linearGradient>
+            <linearGradient id="fslope" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.30" />
+              <stop offset="100%" stopColor="var(--brand)" stopOpacity="0.06" />
+            </linearGradient>
+            <linearGradient id="fslope-leak" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--status-serious)" stopOpacity="0.42" />
+              <stop offset="100%" stopColor="var(--status-serious)" stopOpacity="0.07" />
+            </linearGradient>
             <filter id="fglow" x="-60%" y="-60%" width="220%" height="220%">
-              <feDropShadow dx="0" dy="0" stdDeviation="7" floodColor="var(--brand)" floodOpacity="0.55" />
-            </filter>
-            <filter id="fsoft" x="-30%" y="-30%" width="160%" height="160%">
-              <feDropShadow dx="0" dy="6" stdDeviation="10" floodColor="#000000" floodOpacity="0.35" />
+              <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor="var(--brand)" floodOpacity="0.6" />
             </filter>
           </defs>
 
-          {/* ribbons */}
-          {ribbons.map((r, i) => (
-            <path key={i} d={r.d} fill={`url(#fr-${i})`} filter="url(#fsoft)"
-              className="funnel-piece funnel-ribbon" style={{ animationDelay: `${i * 110}ms` }}>
-              <title>{`${stages[i].label} → ${stages[i + 1].label}: ${pct(r.rate)}`}</title>
+          {/* baseline */}
+          <line x1={40} x2={W - 40} y1={baseline} y2={baseline}
+            stroke="var(--border-hairline)" strokeWidth="1.5" />
+
+          {/* slopes between towers */}
+          {connectors.map((c, i) => (
+            <path key={i} d={c.d} fill={c.isLeak ? "url(#fslope-leak)" : "url(#fslope)"}
+              className="funnel-piece" style={{ animationDelay: `${i * 110 + 60}ms` }}>
+              <title>{`${stages[i].label} → ${stages[i + 1].label}: ${pct(c.rate)}`}</title>
             </path>
           ))}
 
-          {/* stage nodes */}
+          {/* stage towers */}
           {stages.map((s, i) => {
             const last = i === n - 1;
             return (
-              <rect key={s.key}
-                x={xs[i] - (last ? 6 : 3.5)} y={cy - hs[i] / 2 - (last ? 4 : 0)}
-                width={last ? 12 : 7} height={hs[i] + (last ? 8 : 0)} rx={last ? 6 : 3.5}
-                fill={last ? "var(--brand)" : "color-mix(in srgb, var(--brand) 65%, var(--surface-1))"}
-                filter={last ? "url(#fglow)" : undefined}
-                className="funnel-piece" style={{ animationDelay: `${i * 110}ms` }}
-              />
-            );
-          })}
-
-          {/* labels + counts + share-of-impressions */}
-          {stages.map((s, i) => (
-            <g key={s.key} className="funnel-piece" style={{ animationDelay: `${i * 110 + 60}ms` }}
-              textAnchor="middle">
-              <text x={xs[i]} y={22} fontSize="12" fill="var(--text-muted)"
-                style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                {s.label}
-              </text>
-              <text x={xs[i]} y={48} fontSize="22" fontWeight="700" fill="var(--text-primary)"
-                style={{ fontVariantNumeric: "tabular-nums" }}>
-                {shortNum(s.value)}
-              </text>
-              <text x={xs[i]} y={66} fontSize="11" fill="var(--text-muted)"
-                style={{ fontVariantNumeric: "tabular-nums" }}>
-                {i === 0 ? "100%" : pct(s.value / first, s.value / first < 0.01 ? 2 : 1)} of impressions
-              </text>
-            </g>
-          ))}
-
-          {/* conversion pills at the necks */}
-          {ribbons.map((r, i) => {
-            const y = r.thin ? cy - 26 : cy;
-            const label = pct(r.rate, r.rate < 0.01 ? 2 : 1);
-            const w = label.length * 7 + 18;
-            return (
-              <g key={i} className="funnel-piece" style={{ animationDelay: `${i * 110 + 140}ms` }}>
-                <rect x={r.cx - w / 2} y={y - 11} width={w} height={22} rx={11}
-                  fill="var(--surface-1)" stroke="var(--border-hairline)" />
-                <text x={r.cx} y={y + 4} fontSize="11.5" fontWeight="600" textAnchor="middle"
-                  fill={i + 1 === leakIdx ? "var(--status-serious)" : "var(--text-primary)"}
-                  style={{ fontVariantNumeric: "tabular-nums" }}>
-                  {label}
-                </text>
+              <g key={s.key} className="funnel-piece" style={{ animationDelay: `${i * 110}ms` }}>
+                <rect x={xs[i] - barW / 2} y={baseline - hs[i]} width={barW} height={hs[i]}
+                  rx={10} fill={last ? "url(#fbar-final)" : "url(#fbar)"}
+                  filter={last ? "url(#fglow)" : undefined} />
+                {/* roofline highlight */}
+                <rect x={xs[i] - barW / 2} y={baseline - hs[i]} width={barW} height={3.5} rx={1.75}
+                  fill={last ? "#b8fff0" : "color-mix(in srgb, #ffffff 55%, var(--brand))"} opacity={0.9} />
               </g>
             );
           })}
 
-          {/* biggest-leak flag */}
-          {leakIdx > 0 && (
-            <g className="funnel-piece" style={{ animationDelay: `${n * 110 + 200}ms` }} textAnchor="middle">
-              <text x={(xs[leakIdx - 1] + xs[leakIdx]) / 2} y={cy + flowH / 2 + 30}
-                fontSize="11.5" fontWeight="600" fill="var(--status-serious)">
-                ▼ biggest leak — {pct(1 - leakRate)} drop here
+          {/* labels + counts above each tower */}
+          {stages.map((s, i) => (
+            <g key={s.key} className="funnel-piece" style={{ animationDelay: `${i * 110 + 40}ms` }}
+              textAnchor="middle">
+              <text x={xs[i]} y={26} fontSize="11.5" fill="var(--text-muted)"
+                style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                {s.label}
+              </text>
+              <text x={xs[i]} y={56} fontSize="26" fontWeight="800" fill="var(--text-primary)"
+                style={{ fontVariantNumeric: "tabular-nums" }}>
+                {shortNum(s.value)}
               </text>
             </g>
-          )}
+          ))}
+
+          {/* conversion pills riding the slopes */}
+          {connectors.map((c, i) => {
+            const label = pct(c.rate, c.rate < 0.01 ? 2 : 1);
+            const w = label.length * 7.5 + 22;
+            return (
+              <g key={i} className="funnel-piece" style={{ animationDelay: `${i * 110 + 150}ms` }}>
+                <rect x={c.cx - w / 2} y={c.pillY - 12} width={w} height={24} rx={12}
+                  fill={c.isLeak ? "color-mix(in srgb, var(--status-serious) 22%, var(--surface-1))" : "var(--surface-2)"}
+                  stroke={c.isLeak ? "color-mix(in srgb, var(--status-serious) 55%, transparent)" : "var(--border-hairline)"} />
+                <text x={c.cx} y={c.pillY + 4.5} fontSize="12" fontWeight="700" textAnchor="middle"
+                  fill={c.isLeak ? "var(--status-serious)" : "var(--text-primary)"}
+                  style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {label}
+                </text>
+                {c.isLeak && (
+                  <text x={c.cx} y={baseline + 22} fontSize="11.5" fontWeight="700" textAnchor="middle"
+                    fill="var(--status-serious)">
+                    ▼ biggest leak · {pct(1 - leakRate)} lost here
+                  </text>
+                )}
+              </g>
+            );
+          })}
         </svg>
       </div>
       {footer && (
