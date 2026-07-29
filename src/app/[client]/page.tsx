@@ -23,6 +23,7 @@ import { FadeIn, AnimatedNumber } from "@/components/motion";
 import { Sparkline } from "@/components/sparkline";
 import { InsightChips } from "@/components/insight-chips";
 import { SectionHeader } from "@/components/section-header";
+import { Explain } from "@/components/explain";
 
 export default async function OverviewPage({ params, searchParams }: {
   params: Promise<{ client: string }>;
@@ -180,12 +181,41 @@ export default async function OverviewPage({ params, searchParams }: {
                 sub: `${num(mt.purchases)} orders · AOV ${inr(mtAov)}`
                   + (!dv.onlineIsTracked ? ` · store total ${inrCompact(dv.onlineRevenueMtd)}` : ""),
                 spark: sparkRevenue, stroke: "var(--brand)", id: "rev",
+                math: {
+                  title: `Paid revenue · ${periodLabel}`,
+                  steps: [
+                    ...platformTotals.map((pf) => ({
+                      label: `${pf.platform === "meta" ? "Meta" : "Google"} attributed revenue${pf.platform === "google" && manualGoogle ? " (manual monthly)" : ""}`,
+                      value: inrCompact(pf.revenue),
+                    })),
+                    { label: "Paid orders (platform-attributed)", value: num(mt.purchases) },
+                    { label: "AOV = paid revenue ÷ paid orders", value: inr(mtAov) },
+                    ...(!dv.onlineIsTracked ? [{ label: "Store total (Shopify, incl. organic)", value: inrCompact(dv.onlineRevenueMtd) }] : []),
+                  ],
+                  formula: `paid revenue = ${platformTotals.map((pf) => inrCompact(pf.revenue)).join(" + ")} = ${inrCompact(mt.revenue)}`,
+                  note: pv.revenue > 0 ? `Delta compares ${isCurrent ? "the same number of days last month" : "the full previous month"}: ${inrCompact(pv.revenue)}.` : undefined,
+                  source: "Platform daily exports · Sheets → Supabase",
+                  link: { href: `/${slug}/monthly`, label: "Monthly report →" },
+                },
               },
               {
                 label: `ROAS · ${periodLabel}`, value: mtRoas, format: "ratio" as const, suffix: "×",
                 delta: pvRoas > 0 ? mtRoas / pvRoas - 1 : null,
                 sub: `CPA ${inr(mtCpa)} · CTR ${pct(mtCtr)}`,
                 spark: sparkRoas, stroke: "var(--series-1)", id: "roas",
+                math: {
+                  title: `ROAS · ${periodLabel}`,
+                  steps: [
+                    { label: "Paid revenue", value: inrCompact(mt.revenue) },
+                    { label: "Paid spend", value: inrCompact(mt.spend) },
+                    { label: "CPA = spend ÷ paid orders", value: inr(mtCpa) },
+                    { label: "CTR = link clicks ÷ impressions (tracked)", value: pct(mtCtr) },
+                  ],
+                  formula: `ROAS = ${inrCompact(mt.revenue)} ÷ ${inrCompact(mt.spend)} = ${ratio(mtRoas)}×`,
+                  note: "Each platform self-attributes revenue — ROAS is the blended paid return, excluding organic.",
+                  source: "Platform daily exports · Sheets → Supabase",
+                  link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
+                },
               },
               {
                 label: `Spend · ${periodLabel}`, value: mt.spend, format: "inr-compact" as const, suffix: "",
@@ -193,9 +223,20 @@ export default async function OverviewPage({ params, searchParams }: {
                 sub: (platformTotals.map((p) => `${p.platform === "meta" ? "Meta" : "Google"} ${pct(p.spend / monthSpendTotal, 0)}`).join(" · ") || "—")
                   + (manualGoogle ? " · Google from monthly report" : ""),
                 spark: sparkSpend, stroke: "var(--brand-accent)", id: "spend",
+                math: {
+                  title: `Paid spend · ${periodLabel}`,
+                  steps: platformTotals.map((pf) => ({
+                    label: `${pf.platform === "meta" ? "Meta" : "Google"} spend${pf.platform === "google" && manualGoogle ? " (manual monthly)" : ""} · ${pct(pf.spend / monthSpendTotal, 0)} share`,
+                    value: inrCompact(pf.spend),
+                  })),
+                  formula: `spend = ${platformTotals.map((pf) => inrCompact(pf.spend)).join(" + ")} = ${inrCompact(mt.spend)}`,
+                  note: manualGoogle ? "This month predates daily Google data — Google figures come from the monthly report inputs." : undefined,
+                  source: "Platform daily exports · Sheets → Supabase",
+                  link: { href: `/${slug}/campaigns?range=${isCurrent ? "mtd" : "all"}`, label: "Campaign breakdown →" },
+                },
               },
             ]).map((h) => (
-              <div key={h.id}>
+              <Explain key={h.id} block math={h.math}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
                     {h.label}
@@ -219,10 +260,19 @@ export default async function OverviewPage({ params, searchParams }: {
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{h.sub}</span>
                   {h.spark.length > 1 && <Sparkline id={h.id} values={h.spark} stroke={h.stroke} />}
                 </div>
-              </div>
+              </Explain>
             ))}
           </div>
         </section>
+      </FadeIn>
+
+      {/* ===== Customer engine ===== */}
+      <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="Customer engine" title="What a customer costs — and what one is worth"
+          meta="from client-reported monthly customer counts" />
+      </FadeIn>
+      <FadeIn delay={0.05}>
+        <CustomerEconomics months={custMonths} slug={slug} />
       </FadeIn>
 
       {/* ===== INSIGHTS (scoped to selected month) ===== */}
@@ -252,15 +302,6 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== 3–4. Hero & loser campaigns ===== */}
       <FadeIn delay={0.05}>
         <HeroLoserCards hero={dv.hero} loser={dv.loser} slug={slug} periodLabel={periodLabel} />
-      </FadeIn>
-
-      {/* ===== Customer engine ===== */}
-      <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Customer engine" title="What a customer costs — and what one is worth"
-          meta="from client-reported monthly customer counts" />
-      </FadeIn>
-      <FadeIn delay={0.05}>
-        <CustomerEconomics months={custMonths} slug={slug} />
       </FadeIn>
 
       {/* ===== Seasons ===== */}

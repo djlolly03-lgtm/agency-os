@@ -1,5 +1,6 @@
 import type { PacingMetric } from "@/lib/queries";
 import { inrCompact, num, monthLabel } from "@/lib/format";
+import { Explain } from "@/components/explain";
 
 const LABEL: Record<PacingMetric["metric"], string> = {
   revenue: "Revenue", spend: "Spend", orders: "Orders",
@@ -29,7 +30,19 @@ export function PacingCard({ asOf, metrics }: { asOf: string; metrics: PacingMet
           const ahead = m.paceRatio >= 1.05 && m.metric !== "spend";
           const projShort = m.projected < m.goal;
           return (
-            <div key={m.metric}>
+            <Explain key={m.metric} block math={{
+              title: `${LABEL[m.metric]} pacing · ${monthName}`,
+              steps: [
+                { label: `Monthly goal${m.goalIsDefault ? " (default: last month +25%)" : ""}`, value: fmt(m.metric, m.goal) },
+                { label: `Day of month`, value: `${m.daysElapsed} of ${m.daysInMonth}` },
+                { label: `Expected by today = goal × ${m.daysElapsed}/${m.daysInMonth}`, value: fmt(m.metric, m.expectedByToday) },
+                { label: `Actual month-to-date`, value: fmt(m.metric, m.actualMtd) },
+                { label: `Trailing-7-day daily average × ${m.daysInMonth - m.daysElapsed} days left, added to MTD`, value: fmt(m.metric, m.projected) },
+              ],
+              formula: `pace = ${fmt(m.metric, m.actualMtd)} ÷ ${fmt(m.metric, m.expectedByToday)} = ${Math.round(m.paceRatio * 100)}% · projection lands at ${m.goal > 0 ? Math.round((m.projected / m.goal) * 100) : 0}% of goal`,
+              note: m.goalIsDefault ? "No explicit goal set — set real targets on the Internal page." : undefined,
+              source: "Platform daily exports + goals table · Sheets → Supabase",
+            }}>
               <div className="flex items-baseline justify-between">
                 <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
                   {LABEL[m.metric]}
@@ -78,7 +91,7 @@ export function PacingCard({ asOf, metrics }: { asOf: string; metrics: PacingMet
                   {" "}({m.goal > 0 ? Math.round((m.projected / m.goal) * 100) : 0}% of goal)
                 </span>
               </div>
-            </div>
+            </Explain>
           );
         })}
       </div>
