@@ -8,6 +8,7 @@ import { sheetsClient } from "./google";
 
 const META_TAB = "Raw Data";
 const GOOGLE_TAB = "Raw Data - Google";
+const DASHBOARD_TAB = "Dashboard";
 
 /** Sheets serial/date-string → YYYY-MM-DD (sheet uses date-formatted cells). */
 function toIsoDay(v: unknown): string | null {
@@ -35,7 +36,7 @@ const num = (v: unknown): number => {
 };
 
 export async function runSheetSync(clientSlug: string): Promise<{
-  meta: number; google: number; anomalies: Anomaly[];
+  meta: number; google: number; dashboardMonths: number; anomalies: Anomaly[];
 }> {
   const sheetId = process.env.SHEET_ID;
   if (!sheetId) throw new Error("SHEET_ID not set");
@@ -48,11 +49,11 @@ export async function runSheetSync(clientSlug: string): Promise<{
   const sheets = sheetsClient();
   const resp = await sheets.spreadsheets.values.batchGet({
     spreadsheetId: sheetId,
-    ranges: [`'${META_TAB}'!A1:AL`, `'${GOOGLE_TAB}'!A1:K`],
+    ranges: [`'${META_TAB}'!A1:AL`, `'${GOOGLE_TAB}'!A1:K`, `'${DASHBOARD_TAB}'!A1:H200`],
     valueRenderOption: "UNFORMATTED_VALUE",
     dateTimeRenderOption: "SERIAL_NUMBER",
   });
-  const [metaRange, googleRange] = resp.data.valueRanges ?? [];
+  const [metaRange, googleRange, dashRange] = resp.data.valueRanges ?? [];
   const anomalies: Anomaly[] = [];
 
   // ---- Meta tab ----
@@ -113,8 +114,61 @@ export async function runSheetSync(clientSlug: string): Promise<{
   const m = await ing.ingestMeta(metaRows);
   const g = await ing.ingestGoogle(googleRows);
   await ing.refreshCampaignSeen();
-  anomalies.push(...m.anomalies, ...g.anomalies, ...(await ing.detectGaps()));
-  await ing.recordRun("sheet", m.upserted + g.upserted, anomalies);
 
-  return { meta: m.upserted, google: g.upserted, anomalies };
+  // ---- Dashboard tab: monthly store totals (the team types daily Shopify
+  // numbers here — incl. organic). Without this, store totals go stale
+  // mid-month while paid dailies keep syncing. ----
+  let dashboardMonths = 0;
+  const dashValues = dashRange?.values ?? [];
+  // months that HAVE daily Google rows keep their daily data authoritative
+  const googleDailyMonths = new Set(
+    (await db.query<{ m: string }>(
+      `select distinct to_char(date_trunc('month', day), 'YYYY-MM-01') as m
+       from unified_daily where client_id = $1 and platform = 'google'`, [client.id]))
+      .map((r) => String(r.m)));
+
+  for (let i = 0; i < dashValues.length; i++) {
+    const row = dashValues[i] ?? [];
+    // block anchor: col B = date serial, col C = "Meta"
+    const monthDay = toIsoDay(row[1]);
+    if (!monthDay || String(row[2] ?? "").trim().toLowerCase() !== "meta") continue;
+    const month = monthDay.slice(0, 7) + "-01";
+    let googleRow: unknown[] | null = null;
+    let totalRow: unknown[] | null = null;
+    for (let j = i + 1; j < Math.min(i + 6, dashValues.length); j++) {
+      const r2 = dashValues[j] ?? [];
+      const plat = String(r2[2] ?? "").trim().toLowerCase();
+      if (plat.startsWith("google")) googleRow = r2;
+      if (plat === "total") { totalRow = r2; break; }
+      if (plat === "meta") break; // next block without a total row
+    }
+    const upsert = async (metric: string, value: number) => {
+      await db.query(
+        `insert into manual_actuals (client_id, month, metric, value, source)
+         values ($1,$2,$3,$4,'sheet_dashboard')
+         on conflict (client_id, month, metric) do update
+           set value = excluded.value, source = excluded.source, updated_at = now()`,
+        [client.id, month, metric, value]);
+    };
+    if (totalRow) {
+      const totRev = num(totalRow[5]), totOrders = num(totalRow[4]);
+      if (totRev > 0) { await upsert("total_revenue", totRev); dashboardMonths++; }
+      if (totOrders > 0) await upsert("total_orders", Math.round(totOrders));
+    }
+    // Google monthlies only where no daily Google data exists (pre-May months)
+    if (googleRow && !googleDailyMonths.has(month)) {
+      const gs = num(googleRow[3]), gp = num(googleRow[4]), gr = num(googleRow[5]);
+      if (gs > 0) await upsert("google_spend", gs);
+      if (gp > 0) await upsert("google_purchases", gp);
+      if (gr > 0) await upsert("google_revenue", gr);
+    }
+  }
+  if (dashboardMonths === 0) {
+    anomalies.push({ kind: "schema_change", detail: "Dashboard tab: no monthly blocks parsed — layout changed?" });
+  }
+
+  anomalies.push(...m.anomalies, ...g.anomalies, ...(await ing.detectGaps()));
+  await ing.recordRun("sheet", m.upserted + g.upserted + dashboardMonths, anomalies);
+
+  return { meta: m.upserted, google: g.upserted, dashboardMonths, anomalies };
 }
