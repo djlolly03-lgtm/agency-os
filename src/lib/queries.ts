@@ -621,6 +621,71 @@ export async function getAdsForCampaign(campaignId: string) {
   });
 }
 
+// ---------- customer economics ----------
+
+export interface CustomerMonth {
+  month: string;                    // YYYY-MM-01
+  hasData: boolean;                 // client provided new/returning counts
+  newCustomers: number | null;
+  returningCustomers: number | null;
+  totalOrders: number | null;
+  totalRevenue: number | null;
+  paidSpend: number;                // Meta + Google (incl. manual Google months)
+  // derived (null when hasData is false)
+  repeatRate: number | null;        // returning / (new + returning)
+  aov: number | null;               // totalRevenue / totalOrders
+  cacNew: number | null;            // paidSpend / newCustomers — the REAL acquisition cost
+  ltv: number | null;               // AOV / (1 - repeatRate)  (geometric repeat model)
+  ltvCac: number | null;            // ltv / cacNew
+}
+
+/**
+ * Customer economics per month, derived from client-provided monthly
+ * new/returning counts + Shopify totals + paid spend.
+ * LTV model: expected orders per customer = 1/(1−r) where r = repeat rate,
+ * so LTV = AOV ÷ (1−r). Standard, explainable, assumption-light.
+ */
+export async function getCustomerEconomics(clientId: string): Promise<CustomerMonth[]> {
+  const db = await getDb();
+  const months = await getMonths(clientId);           // desc
+  const manual = await db.query<{ month: string; metric: string; value: number }>(
+    `select month::text as month, metric, value from manual_actuals where client_id = $1`, [clientId]);
+  const byMonth = new Map<string, Map<string, number>>();
+  for (const r of manual) {
+    if (!byMonth.has(r.month)) byMonth.set(r.month, new Map());
+    byMonth.get(r.month)!.set(String(r.metric), Number(r.value));
+  }
+  const spendRows = await db.query<{ month: string; spend: number }>(
+    `select to_char(date_trunc('month', day), 'YYYY-MM-01') as month, sum(spend) spend
+     from unified_daily where client_id = $1 group by 1`, [clientId]);
+  const spendBy = new Map(spendRows.map((r) => [String(r.month), N(r.spend)]));
+
+  return [...months].sort().map((month) => {
+    const mm = byMonth.get(month) ?? new Map<string, number>();
+    let paidSpend = spendBy.get(month) ?? 0;
+    // months without daily Google rows carry manual google_spend
+    if (mm.has("google_spend")) paidSpend += mm.get("google_spend")!;
+    const newC = mm.get("new_customers") ?? null;
+    const retC = mm.get("returning_customers") ?? null;
+    const totalOrders = mm.get("total_orders") ?? null;
+    const totalRevenue = mm.get("total_revenue") ?? null;
+    const hasData = newC != null && retC != null && totalOrders != null && totalRevenue != null;
+    if (!hasData) {
+      return { month, hasData, newCustomers: newC, returningCustomers: retC,
+        totalOrders, totalRevenue, paidSpend,
+        repeatRate: null, aov: null, cacNew: null, ltv: null, ltvCac: null };
+    }
+    const customers = newC! + retC!;
+    const repeatRate = customers > 0 ? retC! / customers : 0;
+    const aov = totalOrders! > 0 ? totalRevenue! / totalOrders! : 0;
+    const cacNew = newC! > 0 ? paidSpend / newC! : null;
+    const ltv = repeatRate < 1 ? aov / (1 - repeatRate) : null;
+    const ltvCac = ltv != null && cacNew != null && cacNew > 0 ? ltv / cacNew : null;
+    return { month, hasData, newCustomers: newC, returningCustomers: retC,
+      totalOrders, totalRevenue, paidSpend, repeatRate, aov, cacNew, ltv, ltvCac };
+  });
+}
+
 // ---------- goals, pacing & forecast ----------
 
 export interface PacingMetric {

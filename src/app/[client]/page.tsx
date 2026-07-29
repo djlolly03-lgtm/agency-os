@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import {
   getClientBySlug, getOverview, getTimeseries, getCreatives, getPacing, getDivisionOverview, getMonths,
   getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
+  getCustomerEconomics,
 } from "@/lib/queries";
+import { CustomerEconomics } from "@/components/customer-economics";
 import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar, buildSeasonCalendar } from "@/lib/seasons";
 import { SeasonRadar } from "@/components/season-radar";
 import { SeasonCalendar } from "@/components/season-calendar";
@@ -43,7 +45,7 @@ export default async function OverviewPage({ params, searchParams }: {
   const prevMonthEnd = new Date(Date.UTC(
     Number(selectedMonth.slice(0, 4)), Number(selectedMonth.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10);
 
-  const [ov, daily, weekly, monthly, creatives, pacing, dv, heatDays, goalRows, nameRollups] = await Promise.all([
+  const [ov, daily, weekly, monthly, creatives, pacing, dv, heatDays, goalRows, nameRollups, custMonths] = await Promise.all([
     getOverview(client.id),
     getTimeseries(client.id, "day"),
     getTimeseries(client.id, "week"),
@@ -54,6 +56,7 @@ export default async function OverviewPage({ params, searchParams }: {
     getDailyBlended(client.id, 91),
     getGoals(client.id, selectedMonth),
     getMonthlyNameRollups(client.id),
+    getCustomerEconomics(client.id),
   ]);
   const rangeEnd = monthEnd < dv.asOf ? monthEnd : dv.asOf;
   const funnel = await getFunnel(client.id, { from: selectedMonth, to: rangeEnd });
@@ -142,6 +145,7 @@ export default async function OverviewPage({ params, searchParams }: {
     creatives: isCurrent ? creatives : undefined,
     pacing: isCurrent ? pacing.metrics : undefined,
     seasonal: { closing: radar.closing, missed: radar.missed, offSeason: radar.offSeason },
+    customerMonths: custMonths,
   });
 
   const top = creatives.filter((c) => c.active && (c.status === "winner" || c.status === "hidden_gem"))
@@ -248,6 +252,15 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== 3–4. Hero & loser campaigns ===== */}
       <FadeIn delay={0.05}>
         <HeroLoserCards hero={dv.hero} loser={dv.loser} slug={slug} periodLabel={periodLabel} />
+      </FadeIn>
+
+      {/* ===== Customer engine ===== */}
+      <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="Customer engine" title="What a customer costs — and what one is worth"
+          meta="from client-reported monthly customer counts" />
+      </FadeIn>
+      <FadeIn delay={0.05}>
+        <CustomerEconomics months={custMonths} slug={slug} />
       </FadeIn>
 
       {/* ===== Seasons ===== */}

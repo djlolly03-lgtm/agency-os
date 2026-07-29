@@ -5,13 +5,13 @@
  * month; operational "act now" insights (gems, fatigue, pacing) only
  * appear when viewing the current month.
  */
-import type { CreativeRollup, PacingMetric } from "./queries";
+import type { CreativeRollup, PacingMetric, CustomerMonth } from "./queries";
 import type { ProduceMonthAgg } from "./seasons";
 import { seasonLabel } from "./seasons";
 
 export interface InsightMathStep { label: string; value: string }
 
-export type InsightIcon = "flame" | "trend-down" | "trend-up" | "zap" | "gem" | "target" | "check" | "sun" | "leaf";
+export type InsightIcon = "flame" | "trend-down" | "trend-up" | "zap" | "gem" | "target" | "check" | "sun" | "leaf" | "users";
 
 export interface Insight {
   icon: InsightIcon;
@@ -52,6 +52,8 @@ export interface MonthInsightInput {
   pacing?: PacingMetric[];
   /** seasonal produce radar for the selected month */
   seasonal?: { closing: ProduceMonthAgg[]; missed: ProduceMonthAgg[]; offSeason: ProduceMonthAgg[] };
+  /** customer economics months (only those with client data) */
+  customerMonths?: CustomerMonth[];
 }
 
 export function computeInsights(input: MonthInsightInput): Insight[] {
@@ -162,6 +164,52 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
           note: "Each platform self-attributes — treat cross-platform comparison directionally.",
         },
         link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
+      });
+    }
+  }
+
+  // ---- customer economics: the agency report card ----
+  const cm = (input.customerMonths ?? []).filter((m) => m.hasData && m.ltvCac != null);
+  if (cm.length) {
+    const latest = cm[cm.length - 1];
+    const prevM = cm.length > 1 ? cm[cm.length - 2] : null;
+    out.push({
+      icon: "users",
+      category: `Customer economics · ${latest.month.slice(0, 7)}`,
+      metric: `${latest.ltvCac!.toFixed(1)}×`,
+      text: `LTV:CAC — every ₹1 of acquisition buys ${inr(latest.ltvCac!)} of expected lifetime revenue${prevM ? ` (${prevM.ltvCac!.toFixed(1)}× the month before)` : ""}.`,
+      tone: latest.ltvCac! >= 3 ? "win" : latest.ltvCac! >= 2 ? "info" : "risk",
+      math: {
+        steps: [
+          { label: "New customers (client-reported)", value: String(latest.newCustomers) },
+          { label: "Returning customers (client-reported)", value: String(latest.returningCustomers) },
+          { label: "Repeat rate r = returning ÷ all customers", value: `${Math.round(latest.repeatRate! * 100)}%` },
+          { label: "Blended AOV = store revenue ÷ orders", value: inr(latest.aov!) },
+          { label: "Derived LTV = AOV ÷ (1 − r)", value: inr(latest.ltv!) },
+          { label: "Paid spend that month", value: compact(latest.paidSpend) },
+          { label: "CAC(new) = spend ÷ new customers", value: inr(latest.cacNew!) },
+        ],
+        formula: `LTV:CAC = ${inr(latest.ltv!)} ÷ ${inr(latest.cacNew!)} = ${latest.ltvCac!.toFixed(1)}×`,
+        note: "Geometric repeat model — assumption-light and standard. 3×+ is healthy for D2C.",
+      },
+      link: { href: `/${slug}/monthly`, label: "Monthly report →" },
+    });
+    if (prevM && Math.abs(latest.repeatRate! - prevM.repeatRate!) >= 0.02) {
+      const up2 = latest.repeatRate! > prevM.repeatRate!;
+      out.push({
+        icon: "users",
+        category: "Loyalty trend",
+        metric: `${up2 ? "+" : "−"}${Math.abs((latest.repeatRate! - prevM.repeatRate!) * 100).toFixed(0)}pt`,
+        text: `Repeat rate ${up2 ? "climbed" : "fell"} to ${Math.round(latest.repeatRate! * 100)}% — ${up2 ? "customers are coming back; every point here compounds LTV" : "returning customers thinned; retention needs attention"}.`,
+        tone: up2 ? "win" : "warn",
+        math: {
+          steps: [
+            { label: `${prevM.month.slice(0, 7)} repeat rate`, value: `${Math.round(prevM.repeatRate! * 100)}%` },
+            { label: `${latest.month.slice(0, 7)} repeat rate`, value: `${Math.round(latest.repeatRate! * 100)}%` },
+          ],
+          formula: `Δ = ${Math.round(latest.repeatRate! * 100)}% − ${Math.round(prevM.repeatRate! * 100)}% = ${up2 ? "+" : "−"}${Math.abs((latest.repeatRate! - prevM.repeatRate!) * 100).toFixed(0)}pt`,
+        },
+        link: { href: `/${slug}/monthly`, label: "Monthly report →" },
       });
     }
   }
