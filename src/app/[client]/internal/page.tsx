@@ -6,6 +6,7 @@ import { MatchActions } from "./match-actions";
 import { GoalEditor } from "./goal-editor";
 import { ManualInputsEditor } from "./manual-inputs-editor";
 import { MonthPicker } from "@/components/month-picker";
+import { CinemaBanner } from "@/components/hero-cinema";
 
 /**
  * Internal ops page: data-quality + creative matching queues.
@@ -47,7 +48,12 @@ export default async function InternalPage({ params, searchParams }: {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold">Internal · data ops</h2>
+      <CinemaBanner
+        eyebrow="Internal"
+        line1="The engine room —"
+        line2="inputs, goals, sync."
+        sub="Client-reported numbers, monthly targets, creative matching, and the sync history behind every figure on the dashboard"
+      />
 
       <div className="card p-4">
         <div className="mb-1 flex flex-wrap items-center justify-between gap-2">

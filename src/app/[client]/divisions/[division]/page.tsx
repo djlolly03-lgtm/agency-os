@@ -9,6 +9,7 @@ import { MonthPicker } from "@/components/month-picker";
 import { Funnel } from "@/components/funnel";
 import { DIVISION_LABEL, DIVISION_COLOR } from "@/components/division-section";
 import { DataTrail } from "@/components/data-trail";
+import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
 
 /** Division drill-down: economics, campaign list, month-on-month trend. */
 export default async function DivisionPage({ params, searchParams }: {
@@ -44,18 +45,23 @@ export default async function DivisionPage({ params, searchParams }: {
 
   return (
     <div className="flex flex-col gap-4">
+      <CinemaBanner
+        eyebrow={`Division · ${periodLabel}`}
+        line1={`${DIVISION_LABEL[dv]},`}
+        line2="under the microscope."
+        sub={`${campaigns.length} campaigns this period · classified by campaign name`}
+        skyline={monthlyTrend.map((m) => m[dv].revenue)}
+        stats={<>
+          <BannerStat label="Revenue" value={inrCompact(d.revenue)} />
+          <BannerStat label="Spend" value={inrCompact(d.spend)} />
+          <BannerStat label="ROAS" value={`${ratio(d.roas)}×`} />
+        </>}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <DataTrail
-            crumbs={[{ label: "Overview", href: `/${slug}` }, { label: DIVISION_LABEL[dv] }]}
-            source="Meta + Google daily exports · classified by campaign name"
-          />
-          <div className="mt-2 flex items-center gap-2">
-            <span className="h-3.5 w-3.5 rounded-sm" aria-hidden style={{ background: DIVISION_COLOR[dv] }} />
-            <h2 className="text-base font-semibold">{DIVISION_LABEL[dv]}</h2>
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>{periodLabel}</span>
-          </div>
-        </div>
+        <DataTrail
+          crumbs={[{ label: "Overview", href: `/${slug}` }, { label: DIVISION_LABEL[dv] }]}
+          source="Meta + Google daily exports · classified by campaign name"
+        />
         <MonthPicker months={months} selected={selectedMonth} basePath={`/${slug}/divisions/${dv}`} />
       </div>
 

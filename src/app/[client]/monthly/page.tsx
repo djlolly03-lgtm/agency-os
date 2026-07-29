@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getClientBySlug, getMonthlyReport } from "@/lib/queries";
 import { inrCompact, inr, num, ratio, monthLabel } from "@/lib/format";
+import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
 
 /** The client-facing monthly funnel report — replaces the workbook's Dashboard tab. */
 export default async function MonthlyPage({ params }: { params: Promise<{ client: string }> }) {
@@ -12,13 +13,17 @@ export default async function MonthlyPage({ params }: { params: Promise<{ client
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-base font-semibold">Monthly marketing funnel</h2>
-        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-          Meta &amp; Google from daily platform data · store totals &amp; pre-May Google from declared manual inputs ·
-          Organic = store total − paid
-        </p>
-      </div>
+      <CinemaBanner
+        eyebrow="Monthly report"
+        line1="Month by month,"
+        line2="the whole story."
+        sub="Meta & Google from daily platform data · store totals & pre-May Google from declared manual inputs · Organic = store total − paid"
+        skyline={[...months].reverse().map((m) => m.totalRevenue ?? (m.meta.revenue + m.google.revenue))}
+        stats={<>
+          <BannerStat label="Months tracked" value={String(months.length)} />
+          <BannerStat label="Latest month" value={monthLabel(months[0]?.month.slice(0, 7) ?? "")} />
+        </>}
+      />
 
       <div className="card overflow-x-auto">
         <table className="w-full text-sm tabular">

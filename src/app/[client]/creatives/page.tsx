@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getClientBySlug, getCreatives, type CreativeStatus } from "@/lib/queries";
 import { inrCompact, inr, num, ratio, pct } from "@/lib/format";
 import { StatusChip } from "@/components/status-chip";
+import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
 
 const STATUS_ORDER: CreativeStatus[] = ["winner", "hidden_gem", "fatiguing", "losing", "testing", "average"];
 
@@ -41,8 +42,20 @@ export default async function CreativesPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">Creative performance</h2>
+      <CinemaBanner
+        eyebrow="Creative engine"
+        line1="Winners, gems,"
+        line2="and the fatigued."
+        sub="Every ad's 14-day form — who deserves budget, who needs a rest, who's quietly overperforming"
+        skyline={rows.map((r) => r.window_spend).sort((a, b) => b - a)}
+        stats={<>
+          <BannerStat label="Active creatives" value={String(activeCount)} />
+          <BannerStat label="Winners" value={String(counts["winner"] ?? 0)} />
+          <BannerStat label="Hidden gems" value={String(counts["hidden_gem"] ?? 0)} />
+          <BannerStat label="Fatiguing" value={String(counts["fatiguing"] ?? 0)} />
+        </>}
+      />
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <form className="flex items-center gap-2" action={`/${slug}/creatives`}>
           {sp.status && <input type="hidden" name="status" value={sp.status} />}
           {sp.active && <input type="hidden" name="active" value={sp.active} />}

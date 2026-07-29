@@ -24,7 +24,7 @@ import { Sparkline } from "@/components/sparkline";
 import { InsightChips } from "@/components/insight-chips";
 import { SectionHeader } from "@/components/section-header";
 import { Explain } from "@/components/explain";
-import { HeroCinema } from "@/components/hero-cinema";
+import { HeroCinema, SpotlightStage } from "@/components/hero-cinema";
 import { GrowthStory } from "@/components/growth-story";
 import { buildPeriods, previousWindow, buildMonthlySeries, shortMonth, monthEndDay } from "@/lib/periods";
 
@@ -453,7 +453,9 @@ export default async function OverviewPage({ params, searchParams }: {
           meta="from client-reported monthly customer counts" />
       </FadeIn>
       <FadeIn delay={0.05}>
-        <CustomerEconomics months={custMonths} slug={slug} />
+        <SpotlightStage>
+          <CustomerEconomics months={custMonths} slug={slug} />
+        </SpotlightStage>
       </FadeIn>
 
       {/* ===== INSIGHTS (scoped to selection) ===== */}
@@ -514,11 +516,13 @@ export default async function OverviewPage({ params, searchParams }: {
           meta={periodLabel} />
       </FadeIn>
       <FadeIn delay={0.05}>
+        <SpotlightStage>
         <div className="canvas-dark p-6">
           <Funnel stages={funnel.stages}
             subtitle="Meta attribution (Google's export has no stage data)"
             footer={`Meta flow: ${inrCompact(funnel.spend)} in → ${inrCompact(funnel.revenue)} out · ${(funnel.spend > 0 ? funnel.revenue / funnel.spend : 0).toFixed(2)}× ROAS on this funnel`} />
         </div>
+        </SpotlightStage>
       </FadeIn>
 
       {/* ===== Current-month operations: pacing + live KPIs ===== */}

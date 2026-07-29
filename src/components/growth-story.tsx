@@ -1,5 +1,6 @@
 import { Explain } from "@/components/explain";
 import { AnimatedNumber } from "@/components/motion";
+import { SpotlightStage } from "@/components/hero-cinema";
 import { inrCompact, ratio, num } from "@/lib/format";
 import { shortMonth, type MonthSeries } from "@/lib/periods";
 
@@ -27,16 +28,16 @@ export function GrowthStory({ series, accentMonths }: {
   const best = full.length ? full.reduce((a, b) => (b.revenue > a.revenue ? b : a)) : null;
 
   // ---- chart geometry ----
-  const W = 1040, H = 330, PAD = 10, LABEL_H = 26, TOP = 56;
+  const W = 1180, H = 276, PAD = 10, LABEL_H = 24, TOP = 42;
   const plotH = H - LABEL_H - TOP;
   const n = series.length;
   const slot = (W - PAD * 2) / n;
-  const bw = Math.min(slot * 0.62, 72);
+  const bw = Math.min(slot * 0.62, 78);
   const maxRev = Math.max(...series.map((s) => s.revenue), 1);
   const barX = (i: number) => PAD + slot * i + (slot - bw) / 2;
   const barH = (v: number) => Math.max((v / maxRev) * plotH, 3);
   // cumulative arc on its own scale, riding the upper band of the chart
-  const cy = (v: number) => TOP + (1 - v / totalAll) * (plotH * 0.72);
+  const cy = (v: number) => TOP + (1 - v / totalAll) * (plotH * 0.62);
   const pts = series.map((s, i) => ({ x: PAD + slot * i + slot / 2, y: cy(cumulative[i]) }));
   const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const lineLen = pts.reduce((acc, p, i) =>
@@ -44,6 +45,7 @@ export function GrowthStory({ series, accentMonths }: {
 
   return (
     <div className="flex flex-col gap-3">
+      <SpotlightStage>
       <div className="canvas-dark p-6 md:p-8">
         {/* header: cumulative total + growth stats */}
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
@@ -69,7 +71,7 @@ export function GrowthStory({ series, accentMonths }: {
           </Explain>
           <div className="flex flex-wrap gap-6">
             {multiple != null && first && last && (
-              <Explain block math={{
+              <Explain math={{
                 title: "Growth multiple",
                 steps: [
                   { label: `${shortMonth(first.month)} revenue (first full month)`, value: inrCompact(first.revenue) },
@@ -83,7 +85,7 @@ export function GrowthStory({ series, accentMonths }: {
               </Explain>
             )}
             {avgMom != null && first && last && (
-              <Explain block math={{
+              <Explain math={{
                 title: "Average month-on-month growth",
                 steps: [
                   { label: "First full month", value: inrCompact(first.revenue) },
@@ -98,7 +100,7 @@ export function GrowthStory({ series, accentMonths }: {
               </Explain>
             )}
             {best && (
-              <Explain block math={{
+              <Explain math={{
                 title: "Best month",
                 steps: full.map((s) => ({ label: shortMonth(s.month), value: inrCompact(s.revenue) })),
                 formula: `best = max(monthly revenue) = ${shortMonth(best.month)}`,
@@ -191,6 +193,7 @@ export function GrowthStory({ series, accentMonths }: {
           Orange arc: running total. Dashed bar: month in progress.
         </p>
       </div>
+      </SpotlightStage>
 
       {/* quarter-on-quarter */}
       <QuarterCards series={series} />

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getClientBySlug, getTimeseries, getOverview } from "@/lib/queries";
 import { inrCompact, inr, num, ratio, pct } from "@/lib/format";
 import { TrendChart } from "@/components/trend-chart";
+import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
 
 export default async function PlatformsPage({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
@@ -20,10 +21,19 @@ export default async function PlatformsPage({ params }: { params: Promise<{ clie
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-base font-semibold">Meta vs Google (MTD)</h2>
-      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-        Note: Google reporting is campaign-level (per current export format); Meta is ad-level.
-      </p>
+      <CinemaBanner
+        eyebrow="Platforms"
+        line1="Meta vs Google,"
+        line2="rupee for rupee."
+        sub="Month to date · Google reports campaign-level, Meta ad-level (per current export formats)"
+        skyline={daily.map((d) => d.spend)}
+        stats={ov.mtdByPlatform.map((p) => (
+          <BannerStat key={p.platform}
+            label={`${p.platform} · MTD`}
+            value={`${ratio(p.spend > 0 ? p.revenue / p.spend : 0)}×`}
+            sub={`${inrCompact(p.spend)} spend`} />
+        ))}
+      />
 
       <div className="grid gap-3 md:grid-cols-2">
         {ov.mtdByPlatform.map((p) => (

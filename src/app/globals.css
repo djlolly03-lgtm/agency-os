@@ -441,3 +441,16 @@ h3 { font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   .growth-bar, .growth-line { animation: none; }
 }
+
+/* ---- spotlight glow on dark stages: the hero's light, card-sized ---- */
+.spot-stage .spot-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  background: radial-gradient(430px circle at var(--sx, 50%) var(--sy, 50%),
+    rgba(35, 227, 195, 0.13), rgba(255, 158, 66, 0.05) 45%, transparent 70%);
+}
+.spot-stage:hover .spot-glow { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .spot-stage .spot-glow { display: none; } }

@@ -4,6 +4,7 @@ import { getClientBySlug, getCampaigns, latestDay, type Range } from "@/lib/quer
 import { inrCompact, inr, num, ratio, pct, dayLabel } from "@/lib/format";
 import { CampaignScatter } from "@/components/campaign-scatter";
 import { FadeIn } from "@/components/motion";
+import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
 
 const RANGES = ["7d", "30d", "mtd", "all"] as const;
 type RangeKey = (typeof RANGES)[number];
@@ -45,11 +46,19 @@ export default async function CampaignsPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold">Campaigns</h2>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>{rangeLabel} · {campaigns.length} campaigns</p>
-        </div>
+      <CinemaBanner
+        eyebrow="Campaigns"
+        line1="Every campaign,"
+        line2="weighed and ranked."
+        sub={`${rangeLabel} · ${campaigns.length} campaigns · each dot below opens into its full story`}
+        skyline={campaigns.map((c) => c.spend).sort((a, b) => b - a)}
+        stats={<>
+          <BannerStat label="Spend" value={inrCompact(totalSpend)} />
+          <BannerStat label="Paid revenue" value={inrCompact(totalRevenue)} />
+          <BannerStat label="ROAS" value={`${ratio(accountRoas)}×`} />
+        </>}
+      />
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <div className="flex gap-1 text-xs">
           {isCustom && (
             <span className="rounded-md border px-3 py-1.5 font-semibold"

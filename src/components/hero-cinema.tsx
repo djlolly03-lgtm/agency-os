@@ -10,9 +10,10 @@ const SPOTLIGHT_R = 260;
  * the month's daily revenue skyline — move the light, reveal the data.
  * Falls back to a slow autonomous drift on touch devices / until first move.
  */
-export function HeroCinema({ skyline, children }: {
+export function HeroCinema({ skyline, minHeight = "100dvh", children }: {
   /** daily revenue values for the selected period — drawn as the buried data field */
   skyline: number[];
+  minHeight?: string;
   children: React.ReactNode;
 }) {
   const stageRef = useRef<HTMLElement>(null);
@@ -56,7 +57,7 @@ export function HeroCinema({ skyline, children }: {
     <section
       ref={stageRef}
       className="cinema"
-      style={{ minHeight: "100dvh", ["--spot-r" as string]: `${SPOTLIGHT_R}px` }}
+      style={{ minHeight, ["--spot-r" as string]: `${SPOTLIGHT_R}px` }}
     >
       {/* dormant field (Ken Burns settle-in) */}
       <div className="cinema-base hero-zoom" />
@@ -66,10 +67,98 @@ export function HeroCinema({ skyline, children }: {
         <SkylineField values={skyline} lit />
       </div>
       {/* content */}
-      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-6xl flex-col px-4">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col px-4" style={{ minHeight }}>
         {children}
       </div>
     </section>
+  );
+}
+
+/**
+ * Page-top cinema banner: the hero's language at section scale. Serif+sans
+ * two-line title, sub-line, right-aligned stat slot, spotlight + skyline —
+ * every page opens like the cover, then gets to work.
+ */
+export function CinemaBanner({ eyebrow, line1, line2, sub, skyline = [], stats }: {
+  eyebrow?: string;
+  line1: string;
+  line2: string;
+  sub?: React.ReactNode;
+  /** optional data field buried in the dark (e.g. per-campaign spend) */
+  skyline?: number[];
+  /** right-aligned stat block(s) */
+  stats?: React.ReactNode;
+}) {
+  return (
+    <div className="-mt-32 sm:-mt-24">
+      <HeroCinema skyline={skyline} minHeight="46vh">
+        <div className="flex flex-col justify-end pb-8 pt-28" style={{ minHeight: "46vh" }}>
+          <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-6">
+            <div>
+              {eyebrow && (
+                <div className="hero-anim hero-fade text-[11px] font-bold uppercase tracking-[0.18em]"
+                  style={{ animationDelay: "0.15s", color: "#7ff0d8" }}>
+                  {eyebrow}
+                </div>
+              )}
+              <h1 className="cinema-h1 mt-2 text-4xl sm:text-5xl md:text-6xl">
+                <span className="line-serif hero-anim hero-reveal" style={{ animationDelay: "0.25s" }}>{line1}</span>
+                <span className="line-sans hero-anim hero-reveal" style={{ animationDelay: "0.4s" }}>{line2}</span>
+              </h1>
+              {sub && (
+                <p className="hero-anim hero-fade mt-3 max-w-xl text-xs sm:text-sm"
+                  style={{ animationDelay: "0.6s", color: "rgba(255,255,255,0.65)" }}>
+                  {sub}
+                </p>
+              )}
+            </div>
+            {stats && (
+              <div className="hero-anim hero-fade flex flex-wrap items-end gap-x-8 gap-y-4"
+                style={{ animationDelay: "0.7s" }}>
+                {stats}
+              </div>
+            )}
+          </div>
+        </div>
+      </HeroCinema>
+    </div>
+  );
+}
+
+/** Big-number stat for CinemaBanner's right slot. */
+export function BannerStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <div className="text-[11px] font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+        {label}
+      </div>
+      <div className="num-gradient mt-0.5 text-3xl font-bold tabular md:text-4xl">{value}</div>
+      {sub && <div className="mt-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>{sub}</div>}
+    </div>
+  );
+}
+
+/**
+ * Cursor-glow wrapper for dark stages — the hero's spotlight feel on any
+ * card: a soft teal light follows the pointer while hovering.
+ */
+export function SpotlightStage({ children, radius = 20 }: {
+  children: React.ReactNode;
+  radius?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onMove = (e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--sx", `${e.clientX - r.left}px`);
+    el.style.setProperty("--sy", `${e.clientY - r.top}px`);
+  };
+  return (
+    <div ref={ref} onMouseMove={onMove} className="spot-stage relative">
+      {children}
+      <div className="spot-glow" style={{ borderRadius: radius }} aria-hidden />
+    </div>
   );
 }
 
