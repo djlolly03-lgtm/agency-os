@@ -149,6 +149,14 @@ export default async function OverviewPage({ params, searchParams }: {
     customerMonths: custMonths,
   });
 
+  // ---- store-revenue view (matches the client's sheet mental model) ----
+  const storeTotal = !dv.onlineIsTracked ? dv.onlineRevenueMtd : null;
+  const storeOrders = custMonths.find((m) => m.month === selectedMonth)?.totalOrders ?? null;
+  const prevStore = custMonths.find((m) => m.month === prevMonthStart)?.totalRevenue ?? null;
+  const organicRev = storeTotal != null ? storeTotal - mt.revenue : null;
+  const blendedRoas = storeTotal != null && mt.spend > 0 ? storeTotal / mt.spend : null;
+  const prevBlended = prevStore != null && pv.spend > 0 ? prevStore / pv.spend : null;
+
   const top = creatives.filter((c) => c.active && (c.status === "winner" || c.status === "hidden_gem"))
     .sort((a, b) => b.window_revenue / Math.max(b.window_spend, 1) - a.window_revenue / Math.max(a.window_spend, 1))
     .slice(0, 4);
@@ -176,44 +184,68 @@ export default async function OverviewPage({ params, searchParams }: {
           <div className="mt-6 grid gap-8 md:grid-cols-3">
             {([
               {
-                label: `Paid revenue · ${periodLabel}`, value: mt.revenue, format: "inr-compact" as const, suffix: "",
-                delta: pv.revenue > 0 ? mt.revenue / pv.revenue - 1 : null,
-                sub: `${num(mt.purchases)} orders · AOV ${inr(mtAov)}`
-                  + (!dv.onlineIsTracked ? ` · store total ${inrCompact(dv.onlineRevenueMtd)}` : ""),
+                label: `${storeTotal != null ? "Revenue" : "Paid revenue"} · ${periodLabel}`,
+                value: storeTotal ?? mt.revenue, format: "inr-compact" as const, suffix: "",
+                delta: storeTotal != null
+                  ? (!isCurrent && prevStore ? storeTotal / prevStore - 1 : null)
+                  : (pv.revenue > 0 ? mt.revenue / pv.revenue - 1 : null),
+                sub: storeTotal != null
+                  ? `paid ${inrCompact(mt.revenue)} · organic ${inrCompact(organicRev!)} · ${storeOrders != null ? `${num(storeOrders)} orders` : `${num(mt.purchases)} paid orders`}`
+                  : `${num(mt.purchases)} orders · AOV ${inr(mtAov)}`,
                 spark: sparkRevenue, stroke: "var(--brand)", id: "rev",
                 math: {
-                  title: `Paid revenue · ${periodLabel}`,
+                  title: `${storeTotal != null ? "Store revenue" : "Paid revenue"} · ${periodLabel}`,
                   steps: [
                     ...platformTotals.map((pf) => ({
                       label: `${pf.platform === "meta" ? "Meta" : "Google"} attributed revenue${pf.platform === "google" && manualGoogle ? " (manual monthly)" : ""}`,
                       value: inrCompact(pf.revenue),
                     })),
-                    { label: "Paid orders (platform-attributed)", value: num(mt.purchases) },
-                    { label: "AOV = paid revenue ÷ paid orders", value: inr(mtAov) },
-                    ...(!dv.onlineIsTracked ? [{ label: "Store total (Shopify, incl. organic)", value: inrCompact(dv.onlineRevenueMtd) }] : []),
+                    { label: "Paid revenue (Meta + Google)", value: inrCompact(mt.revenue) },
+                    ...(storeTotal != null ? [
+                      { label: "Organic = store total − paid", value: inrCompact(organicRev!) },
+                      { label: "Store total (Shopify, entered daily in the sheet)", value: inrCompact(storeTotal) },
+                      ...(storeOrders != null ? [{ label: "Store orders", value: num(storeOrders) }] : []),
+                    ] : [
+                      { label: "Paid orders (platform-attributed)", value: num(mt.purchases) },
+                      { label: "AOV = paid revenue ÷ paid orders", value: inr(mtAov) },
+                    ]),
                   ],
-                  formula: `paid revenue = ${platformTotals.map((pf) => inrCompact(pf.revenue)).join(" + ")} = ${inrCompact(mt.revenue)}`,
-                  note: pv.revenue > 0 ? `Delta compares ${isCurrent ? "the same number of days last month" : "the full previous month"}: ${inrCompact(pv.revenue)}.` : undefined,
-                  source: "Platform daily exports · Sheets → Supabase",
+                  formula: storeTotal != null
+                    ? `revenue = paid ${inrCompact(mt.revenue)} + organic ${inrCompact(organicRev!)} = ${inrCompact(storeTotal)}`
+                    : `paid revenue = ${platformTotals.map((pf) => inrCompact(pf.revenue)).join(" + ")} = ${inrCompact(mt.revenue)}`,
+                  note: storeTotal != null
+                    ? "Matches the sheet's Dashboard total. Store totals sync daily from the Dashboard tab (Shopify numbers incl. organic)."
+                    : "No store total available for this month — showing platform-attributed revenue only.",
+                  source: "Dashboard tab (Shopify daily) + platform exports · Sheets → Supabase",
                   link: { href: `/${slug}/monthly`, label: "Monthly report →" },
                 },
               },
               {
-                label: `ROAS · ${periodLabel}`, value: mtRoas, format: "ratio" as const, suffix: "×",
-                delta: pvRoas > 0 ? mtRoas / pvRoas - 1 : null,
-                sub: `CPA ${inr(mtCpa)} · CTR ${pct(mtCtr)}`,
+                label: `${blendedRoas != null ? "Blended ROAS" : "ROAS"} · ${periodLabel}`,
+                value: blendedRoas ?? mtRoas, format: "ratio" as const, suffix: "×",
+                delta: blendedRoas != null
+                  ? (!isCurrent && prevBlended ? blendedRoas / prevBlended - 1 : null)
+                  : (pvRoas > 0 ? mtRoas / pvRoas - 1 : null),
+                sub: blendedRoas != null
+                  ? `paid ROAS ${ratio(mtRoas)}× · CPA ${inr(mtCpa)}`
+                  : `CPA ${inr(mtCpa)} · CTR ${pct(mtCtr)}`,
                 spark: sparkRoas, stroke: "var(--series-1)", id: "roas",
                 math: {
-                  title: `ROAS · ${periodLabel}`,
+                  title: `${blendedRoas != null ? "Blended ROAS" : "Paid ROAS"} · ${periodLabel}`,
                   steps: [
-                    { label: "Paid revenue", value: inrCompact(mt.revenue) },
+                    ...(blendedRoas != null ? [{ label: "Store revenue (Shopify, incl. organic)", value: inrCompact(storeTotal!) }] : []),
+                    { label: "Paid revenue (platform-attributed)", value: inrCompact(mt.revenue) },
                     { label: "Paid spend", value: inrCompact(mt.spend) },
+                    { label: "Paid ROAS = paid revenue ÷ spend", value: `${ratio(mtRoas)}×` },
                     { label: "CPA = spend ÷ paid orders", value: inr(mtCpa) },
-                    { label: "CTR = link clicks ÷ impressions (tracked)", value: pct(mtCtr) },
                   ],
-                  formula: `ROAS = ${inrCompact(mt.revenue)} ÷ ${inrCompact(mt.spend)} = ${ratio(mtRoas)}×`,
-                  note: "Each platform self-attributes revenue — ROAS is the blended paid return, excluding organic.",
-                  source: "Platform daily exports · Sheets → Supabase",
+                  formula: blendedRoas != null
+                    ? `blended ROAS = ${inrCompact(storeTotal!)} ÷ ${inrCompact(mt.spend)} = ${ratio(blendedRoas)}×`
+                    : `ROAS = ${inrCompact(mt.revenue)} ÷ ${inrCompact(mt.spend)} = ${ratio(mtRoas)}×`,
+                  note: blendedRoas != null
+                    ? "Blended = every store rupee (incl. organic) per ad rupee — matches the sheet. Paid ROAS credits only platform-attributed revenue."
+                    : "Each platform self-attributes revenue — paid return only.",
+                  source: "Dashboard tab + platform exports · Sheets → Supabase",
                   link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
                 },
               },
