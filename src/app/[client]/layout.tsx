@@ -33,25 +33,26 @@ export default async function ClientLayout({
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-40 border-b"
-        style={{
-          background: "color-mix(in srgb, var(--page) 82%, transparent)",
-          backdropFilter: "blur(14px) saturate(1.4)",
-          WebkitBackdropFilter: "blur(14px) saturate(1.4)",
-          borderColor: "var(--border-hairline)",
-        }}>
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
-          <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/organik-truck-logo.png" alt={client.name} className="h-9 w-auto rounded-md"
-              style={{ background: "#ffffff", padding: "2px 6px" }} />
-            <SyncChip slug={slug} lastDay={lastDay} lastSync={syncRows[0]?.ran_at ?? null} />
-          </div>
+      {/* floating glass nav — no bar, three glass islands over the page */}
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
+        <div className="pointer-events-auto glass-chip">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/organik-truck-logo.png" alt={client.name} className="h-8 w-auto rounded-full"
+            style={{ background: "#ffffff", padding: "2px 6px" }} />
+          <span className="serif-display hidden pr-2 text-lg leading-none sm:inline"
+            style={{ color: "var(--text-primary)" }}>
+            Organik Truck
+          </span>
+        </div>
+        <div className="pointer-events-auto order-3 w-full sm:order-none sm:absolute sm:left-1/2 sm:w-auto sm:-translate-x-1/2">
           <Nav slug={slug} items={NAV} />
+        </div>
+        <div className="pointer-events-auto hidden lg:block">
+          <SyncChip slug={slug} lastDay={lastDay} lastSync={syncRows[0]?.ran_at ?? null} />
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-6xl flex-1 px-4 pb-8 pt-5">
+      <div className="mx-auto w-full max-w-6xl flex-1 px-4 pb-8 pt-32 sm:pt-24">
         {children}
       </div>
 

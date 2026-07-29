@@ -352,15 +352,16 @@ export async function getMonths(clientId: string): Promise<string[]> {
   return rows.map((r) => String(r.m));
 }
 
-export async function getDivisionOverview(clientId: string, month?: string) {
+export async function getDivisionOverview(clientId: string, month?: string, range?: Range) {
   const db = await getDb();
   const today = await latestDay(clientId);
-  const monthStart = month ?? today.slice(0, 8) + "01";
+  const monthStart = range?.from ?? month ?? today.slice(0, 8) + "01";
   const monthEndDate = new Date(Date.UTC(
     Number(monthStart.slice(0, 4)), Number(monthStart.slice(5, 7)), 0));
-  const monthEnd = monthEndDate.toISOString().slice(0, 10);
+  const monthEnd = range?.to ?? monthEndDate.toISOString().slice(0, 10);
   const rangeEnd = monthEnd < today ? monthEnd : today;   // past month = full month
-  const isPartial = rangeEnd === today && monthStart === today.slice(0, 8) + "01";
+  const isPartial = rangeEnd === today &&
+    (range ? range.to >= today : monthStart === today.slice(0, 8) + "01");
   const campaigns = await getCampaigns(clientId, { from: monthStart, to: rangeEnd });
 
   // per-division aggregates
@@ -375,12 +376,18 @@ export async function getDivisionOverview(clientId: string, month?: string) {
     a.campaigns += 1;
   }
 
-  // manual inputs: offline revenue, division LTV placeholders, Shopify store total
+  // manual inputs: offline revenue, division LTV placeholders, Shopify store
+  // total. In range mode, additive metrics are summed over the covered months.
   const manual = await db.query<{ metric: string; value: number }>(
-    `select metric, value from manual_actuals
-     where client_id = $1 and month = $2
-       and metric in ('offline_revenue','ltv_fruits_veggies','ltv_groceries','total_revenue')`,
-    [clientId, monthStart]);
+    range
+      ? `select metric, sum(value) as value from manual_actuals
+         where client_id = $1 and month between $2 and $3
+           and metric in ('offline_revenue','total_revenue')
+         group by metric`
+      : `select metric, value from manual_actuals
+         where client_id = $1 and month = $2
+           and metric in ('offline_revenue','ltv_fruits_veggies','ltv_groceries','total_revenue')`,
+    range ? [clientId, range.from, range.to] : [clientId, monthStart]);
   const manualMap = new Map(manual.map((m) => [String(m.metric), Number(m.value)]));
 
   const divisions: DivisionRollup[] = (["fruits_veggies", "groceries"] as Division[]).map((dv) => {
