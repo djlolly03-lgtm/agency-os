@@ -26,6 +26,9 @@ import { SectionHeader } from "@/components/section-header";
 import { Explain } from "@/components/explain";
 import { HeroCinema, SpotlightStage } from "@/components/hero-cinema";
 import { GrowthStory } from "@/components/growth-story";
+import { MarginEngine } from "@/components/margin-engine";
+import { ChannelDuel } from "@/components/channel-duel";
+import { RevenueBridge, type BridgeMonth } from "@/components/revenue-bridge";
 import { buildPeriods, previousWindow, buildMonthlySeries, shortMonth, monthEndDay } from "@/lib/periods";
 
 export default async function OverviewPage({ params, searchParams }: {
@@ -138,7 +141,11 @@ export default async function OverviewPage({ params, searchParams }: {
     if (pf === "google" && manualGoogleSum) {
       s.spend += manualGoogleSum.spend; s.revenue += manualGoogleSum.revenue; s.purchases += manualGoogleSum.purchases;
     }
-    return { platform: pf, spend: s.spend, revenue: s.revenue, roas: s.spend > 0 ? s.revenue / s.spend : 0 };
+    return {
+      platform: pf, spend: s.spend, revenue: s.revenue, purchases: s.purchases,
+      impressions: s.impressions, roas: s.spend > 0 ? s.revenue / s.spend : 0,
+      manual: pf === "google" && !!manualGoogleSum,
+    };
   }).filter((p) => p.spend > 0);
   const monthSpendTotal = mt.spend || 1;
 
@@ -341,6 +348,60 @@ export default async function OverviewPage({ params, searchParams }: {
 
   const totalAllTime = series.reduce((t, s) => t + s.revenue, 0);
 
+  // ---- 02 · channel duel: dynamic act title ----
+  const duelBest = platformTotals.length >= 2 ? [...platformTotals].sort((a, b) => b.roas - a.roas)[0] : null;
+  const duelBig = platformTotals.length >= 2 ? platformTotals.reduce((a, b) => (b.spend > a.spend ? b : a)) : null;
+  const pfName = (p: string) => (p === "meta" ? "Meta" : "Google");
+  const duelTitle = duelBest && duelBig
+    ? duelBest.platform === duelBig.platform
+      ? `${pfName(duelBest.platform)} leads on every rupee.`
+      : `${pfName(duelBest.platform)} earns more per rupee. ${pfName(duelBig.platform)} gets the money.`
+    : "";
+
+  // ---- 01 · efficiency: dynamic act title ----
+  const fullSeries = series.filter((s) => !s.isPartial);
+  const spendScaleX = fullSeries.length > 1 && fullSeries[0].spend > 0
+    ? fullSeries[fullSeries.length - 1].spend / fullSeries[0].spend : null;
+  const marginTitle = spendScaleX != null && spendScaleX > 1.5
+    ? `Spend scaled ${spendScaleX.toFixed(1)}× — ROAS didn’t flinch.`
+    : "The margin engine";
+
+  // ---- 03 · revenue bridge: per-month platform revenue splits ----
+  const platRevByMonth = new Map<string, { meta: number; google: number }>();
+  for (const r of daily) {
+    const m = r.period.slice(0, 8) + "01";
+    const slot = platRevByMonth.get(m) ?? { meta: 0, google: 0 };
+    if (r.platform === "meta") slot.meta += r.revenue; else slot.google += r.revenue;
+    platRevByMonth.set(m, slot);
+  }
+  for (const [m, g] of manualGoogleByMonth) {
+    const slot = platRevByMonth.get(m) ?? { meta: 0, google: 0 };
+    slot.google += g.revenue;
+    platRevByMonth.set(m, slot);
+  }
+  const toBridgeMonth = (m: string | undefined): BridgeMonth | null => {
+    if (!m) return null;
+    const s = seriesByMonth.get(m);
+    if (!s || s.storeRevenue == null || s.isPartial) return null;
+    const pr = platRevByMonth.get(m) ?? { meta: 0, google: 0 };
+    return {
+      label: shortMonth(m), meta: pr.meta, google: pr.google,
+      organic: s.storeRevenue - pr.meta - pr.google, total: s.storeRevenue,
+    };
+  };
+  // complete-month pair: the selected month (or, on the running month, the
+  // last complete one) vs the month before it
+  const bridgeCurMonth = isMonthMode ? (isCurrent ? months[1] : selectedMonth) : undefined;
+  const bridgePrevMonth = bridgeCurMonth
+    ? new Date(Date.UTC(Number(bridgeCurMonth.slice(0, 4)), Number(bridgeCurMonth.slice(5, 7)) - 2, 1)).toISOString().slice(0, 10)
+    : undefined;
+  const bridgeCur = toBridgeMonth(bridgeCurMonth);
+  const bridgePrev = toBridgeMonth(bridgePrevMonth);
+
+  // numbered acts, in render order
+  let actNo = 0;
+  const num2 = () => String(++actNo).padStart(2, "0");
+
   return (
     <div className="flex flex-col gap-4">
       {/* ===== CINEMA HERO — full-bleed, spotlight reveals the data ===== */}
@@ -438,18 +499,25 @@ export default async function OverviewPage({ params, searchParams }: {
       {periodSel && (
         <>
           <FadeIn>
-            <SectionHeader eyebrow="Growth" title="Up and to the right"
+            <SectionHeader index={num2()} eyebrow="Growth" title="Up and to the right"
               meta={`monthly revenue · ${periodSel.label} highlighted`} />
           </FadeIn>
           <FadeIn>
             <GrowthStory series={series} accentMonths={periodSel.months} />
+          </FadeIn>
+          <FadeIn>
+            <SectionHeader index={num2()} eyebrow="Efficiency" title={marginTitle}
+              meta="revenue vs spend · the gap is margin" />
+          </FadeIn>
+          <FadeIn>
+            <MarginEngine series={series} />
           </FadeIn>
         </>
       )}
 
       {/* ===== Customer engine ===== */}
       <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Customer engine" title="What a customer costs — and what one is worth"
+        <SectionHeader index={num2()} eyebrow="Customer engine" title="What a customer costs — and what one is worth"
           meta="from client-reported monthly customer counts" />
       </FadeIn>
       <FadeIn delay={0.05}>
@@ -460,7 +528,7 @@ export default async function OverviewPage({ params, searchParams }: {
 
       {/* ===== INSIGHTS (scoped to selection) ===== */}
       <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Signals" title="What the data is telling us"
+        <SectionHeader index={num2()} eyebrow="Signals" title="What the data is telling us"
           meta="click any card for the math" />
       </FadeIn>
       <FadeIn delay={0.05}>
@@ -469,7 +537,7 @@ export default async function OverviewPage({ params, searchParams }: {
 
       {/* ===== Money flow ===== */}
       <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Money flow" title="Where revenue comes from"
+        <SectionHeader index={num2()} eyebrow="Money flow" title="Where revenue comes from"
           meta="online vs offline · divisions · best & worst" />
       </FadeIn>
       <FadeIn delay={0.05}>
@@ -483,22 +551,56 @@ export default async function OverviewPage({ params, searchParams }: {
         <HeroLoserCards hero={dv.hero} loser={dv.loser} slug={slug} periodLabel={periodLabel} />
       </FadeIn>
 
+      {/* ===== The bridge: where last month's change came from ===== */}
+      {bridgePrev && bridgeCur && (
+        <>
+          <FadeIn delay={0.05}>
+            <SectionHeader index={num2()} eyebrow="The bridge"
+              title={`${bridgePrev.label} → ${bridgeCur.label}: where the change came from.`}
+              meta="Meta · Google · organic — measured, not modelled" />
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <RevenueBridge prev={bridgePrev} cur={bridgeCur} />
+          </FadeIn>
+        </>
+      )}
+
+      {/* ===== Channels: Meta vs Google ===== */}
+      {platformTotals.length >= 2 && (
+        <>
+          <FadeIn delay={0.05}>
+            <SectionHeader index={num2()} eyebrow="Channels" title={duelTitle}
+              meta={`${periodLabel} · winner ticks per metric`} />
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <ChannelDuel platforms={platformTotals} periodLabel={periodLabel} />
+          </FadeIn>
+        </>
+      )}
+
       {/* ===== Growth story (month mode: after money flow) ===== */}
       {!periodSel && (
         <>
           <FadeIn delay={0.05}>
-            <SectionHeader eyebrow="Growth" title="Up and to the right"
+            <SectionHeader index={num2()} eyebrow="Growth" title="Up and to the right"
               meta={`all ${monthsAsc.length} months · ${selectedKey === months[0].slice(0, 7) ? "this month" : monthLabel(selectedKey)} highlighted`} />
           </FadeIn>
           <FadeIn delay={0.05}>
             <GrowthStory series={series} accentMonths={[selectedMonth]} />
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <SectionHeader index={num2()} eyebrow="Efficiency" title={marginTitle}
+              meta="revenue vs spend · the gap is margin" />
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <MarginEngine series={series} />
           </FadeIn>
         </>
       )}
 
       {/* ===== Seasons ===== */}
       <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Seasons" title="Selling what nature ships"
+        <SectionHeader index={num2()} eyebrow="Seasons" title="Selling what nature ships"
           meta="produce windows vs actual sales · India seasons" />
       </FadeIn>
       {isMonthMode && (
@@ -512,7 +614,7 @@ export default async function OverviewPage({ params, searchParams }: {
 
       {/* ===== Conversion funnel ===== */}
       <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="The funnel" title="From impression to purchase"
+        <SectionHeader index={num2()} eyebrow="The funnel" title="From impression to purchase"
           meta={periodLabel} />
       </FadeIn>
       <FadeIn delay={0.05}>
@@ -528,7 +630,7 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== Current-month operations: pacing + live KPIs ===== */}
       {isCurrent && (
         <FadeIn delay={0.05}>
-          <SectionHeader eyebrow="Operations" title="Pace, pulse, and the daily grind"
+          <SectionHeader index={num2()} eyebrow="Operations" title="Pace, pulse, and the daily grind"
             meta="live · current month only" />
         </FadeIn>
       )}
@@ -569,7 +671,7 @@ export default async function OverviewPage({ params, searchParams }: {
 
       {/* ===== Top creatives (current operational state) ===== */}
       <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Creative engine" title="What deserves more budget" meta="live status" />
+        <SectionHeader index={num2()} eyebrow="Creative engine" title="What deserves more budget" meta="live status" />
       </FadeIn>
       <FadeIn delay={0.05}>
         <div className="card p-5">

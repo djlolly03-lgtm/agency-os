@@ -3,6 +3,7 @@ import { getClientBySlug, getTimeseries, getOverview } from "@/lib/queries";
 import { inrCompact, inr, num, ratio, pct } from "@/lib/format";
 import { TrendChart } from "@/components/trend-chart";
 import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
+import { ChannelDuel } from "@/components/channel-duel";
 
 export default async function PlatformsPage({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
@@ -34,6 +35,14 @@ export default async function PlatformsPage({ params }: { params: Promise<{ clie
             sub={`${inrCompact(p.spend)} spend`} />
         ))}
       />
+
+      {ov.mtdByPlatform.length >= 2 && (
+        <ChannelDuel periodLabel="MTD"
+          platforms={ov.mtdByPlatform.map((p) => ({
+            platform: p.platform, spend: p.spend, revenue: p.revenue,
+            purchases: p.purchases, impressions: p.impressions,
+          }))} />
+      )}
 
       <div className="grid gap-3 md:grid-cols-2">
         {ov.mtdByPlatform.map((p) => (

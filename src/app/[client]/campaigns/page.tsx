@@ -5,6 +5,8 @@ import { inrCompact, inr, num, ratio, pct, dayLabel } from "@/lib/format";
 import { CampaignScatter } from "@/components/campaign-scatter";
 import { FadeIn } from "@/components/motion";
 import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
+import { KillMap } from "@/components/kill-map";
+import { SectionHeader } from "@/components/section-header";
 
 const RANGES = ["7d", "30d", "mtd", "all"] as const;
 type RangeKey = (typeof RANGES)[number];
@@ -86,6 +88,14 @@ export default async function CampaignsPage({
             spend: c.spend, revenue: c.revenue, roas: c.roas, purchases: c.purchases }))}
           accountRoas={accountRoas} slug={slug}
         />
+      </FadeIn>
+
+      <FadeIn delay={0.05}>
+        <SectionHeader eyebrow="The kill map" title="Scale, watch, or cut."
+          meta={`${rangeLabel} · CAC vs AOV · bubble = spend`} />
+      </FadeIn>
+      <FadeIn delay={0.05}>
+        <KillMap campaigns={campaigns} slug={slug} />
       </FadeIn>
 
       <FadeIn>
