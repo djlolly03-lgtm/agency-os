@@ -26,11 +26,11 @@ and how much effort it takes. Priority order.
 - **Unlocks:** honest pacing, projections, and goal-attainment insights.
 - **How:** Internal page → Goals; 3 numbers a month (revenue / spend / orders).
 
-### 4. Creatives Drive folder share
-- **Have:** no access yet.
-- **Unlocks:** thumbnails on every creative card + the visual creative gallery.
-- **How:** share the folder with `agency-os-sync@agency-os-503811.iam.gserviceaccount.com`
-  and `djlolly03@gmail.com` (Viewer).
+### 4. Creatives Drive folder share — ✅ RECEIVED (30 Jul)
+- **Status:** folder indexed — 408 files, 145 of 360 ads auto-matched (111 exact + 34 fuzzy).
+  Thumbnails are live on the dashboard; the daily sync re-indexes and re-matches
+  automatically, so the match rate climbs as the team's naming alignment lands.
+- **Remaining:** unmatched ads can be linked by hand on the Internal page's matching queue.
 
 ---
 
