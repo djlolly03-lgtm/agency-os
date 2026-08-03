@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getClientBySlug, getCreatives, type CreativeStatus } from "@/lib/queries";
-import { inrCompact, inr, num, ratio, pct } from "@/lib/format";
-import { StatusChip } from "@/components/status-chip";
+import { getClientBySlug, getCreatives, type CreativeStatus, type CreativeRollup } from "@/lib/queries";
+import { inrCompact, ratio } from "@/lib/format";
 import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
+import { SectionHeader } from "@/components/section-header";
+import { CreativeCard, toneFor } from "@/components/creative-card";
+import { FadeIn } from "@/components/motion";
 
 const STATUS_ORDER: CreativeStatus[] = ["winner", "hidden_gem", "fatiguing", "losing", "testing", "average"];
+
+/** 14d rollup line for a tier header. */
+function tierMeta(rows: CreativeRollup[], baseline: number): string {
+  const spend = rows.reduce((t, r) => t + (r.active ? r.window_spend : 0), 0);
+  const revenue = rows.reduce((t, r) => t + (r.active ? r.window_revenue : 0), 0);
+  const roas = spend > 0 ? revenue / spend : 0;
+  return `${rows.length} creatives · ${inrCompact(spend)} in 14d at ${ratio(roas)}× · account ${ratio(baseline)}×`;
+}
 
 export default async function CreativesPage({
   params, searchParams,
@@ -18,19 +28,35 @@ export default async function CreativesPage({
   const client = await getClientBySlug(slug);
   if (!client) notFound();
 
-  let rows = await getCreatives(client.id);
+  const all = await getCreatives(client.id);
   const counts: Record<string, number> = {};
-  for (const r of rows) counts[r.status] = (counts[r.status] ?? 0) + 1;
-  const activeCount = rows.filter((r) => r.active).length;
+  for (const r of all) counts[r.status] = (counts[r.status] ?? 0) + 1;
+  const activeRows = all.filter((r) => r.active);
+
+  // the line everyone is judged against: account-wide 14d ROAS
+  const winSpend = all.reduce((t, r) => t + r.window_spend, 0);
+  const winRev = all.reduce((t, r) => t + r.window_revenue, 0);
+  const baseline = winSpend > 0 ? winRev / winSpend : 0;
 
   const showAll = sp.active === "all";
-  if (!showAll) rows = rows.filter((r) => r.active);
+  let rows = showAll ? all : activeRows;
   if (sp.status) rows = rows.filter((r) => r.status === sp.status);
   if (sp.q) {
     const q = sp.q.toLowerCase();
     rows = rows.filter((r) =>
       r.ad_name.toLowerCase().includes(q) || r.campaign.toLowerCase().includes(q) || r.ad_set.toLowerCase().includes(q));
   }
+  const filtered = Boolean(sp.status || sp.q);
+
+  // ---- the triage: what to do with money, in order ----
+  const byRoas = (a: CreativeRollup, b: CreativeRollup) =>
+    (b.window_spend > 0 ? b.window_revenue / b.window_spend : 0) - (a.window_spend > 0 ? a.window_revenue / a.window_spend : 0);
+  const bySpend = (a: CreativeRollup, b: CreativeRollup) => b.window_spend - a.window_spend;
+
+  const scale = activeRows.filter((r) => r.status === "winner" || r.status === "hidden_gem").sort(byRoas);
+  const bleed = activeRows.filter((r) => r.status === "losing" || r.status === "fatiguing").sort(bySpend);
+  const watch = activeRows.filter((r) => r.status === "average" || r.status === "testing").sort(bySpend);
+  const retired = showAll ? all.filter((r) => !r.active).sort(bySpend) : [];
 
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
@@ -40,23 +66,52 @@ export default async function CreativesPage({
     return s ? `?${s}` : "";
   };
 
+  const grid = (list: CreativeRollup[], compact = false) => (
+    <div className={`grid gap-3 sm:grid-cols-2 ${compact ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+      {list.map((c) => (
+        <CreativeCard key={c.ad_id} c={c} slug={slug} baseline={baseline} tone={toneFor(c)} compact={compact} />
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <CinemaBanner
         eyebrow="Creative engine"
         line1="Winners, gems,"
         line2="and the fatigued."
-        sub="Every ad's 14-day form — who deserves budget, who needs a rest, who's quietly overperforming"
-        skyline={rows.map((r) => r.window_spend).sort((a, b) => b - a)}
+        sub={`Every ad judged on its trailing 14 days against the account line of ${ratio(baseline)}× — scale the green, fix the red`}
+        skyline={activeRows.map((r) => r.window_spend).sort((a, b) => b - a)}
         stats={<>
-          <BannerStat label="Active creatives" value={String(activeCount)} />
-          <BannerStat label="Winners" value={String(counts["winner"] ?? 0)} />
-          <BannerStat label="Hidden gems" value={String(counts["hidden_gem"] ?? 0)} />
-          <BannerStat label="Fatiguing" value={String(counts["fatiguing"] ?? 0)} />
+          <BannerStat label="Scale these" value={String(scale.length)} sub="winners + gems" />
+          <BannerStat label="Watch" value={String(watch.length)} sub="testing + average" />
+          <BannerStat label="Fix or kill" value={String(bleed.length)} sub="fatiguing + losing" />
         </>}
       />
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <form className="flex items-center gap-2" action={`/${slug}/creatives`}>
+
+      {/* controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1 text-xs">
+          <Link href={qs({ status: undefined })}
+            className="rounded-full border px-3 py-1"
+            style={{ borderColor: "var(--border-hairline)", background: !sp.status ? "var(--grid)" : "transparent", fontWeight: !sp.status ? 600 : 400 }}>
+            All {showAll ? all.length : activeRows.length}
+          </Link>
+          {STATUS_ORDER.map((s) => (
+            <Link key={s} href={qs({ status: s })}
+              className="rounded-full border px-3 py-1 capitalize"
+              style={{ borderColor: "var(--border-hairline)", background: sp.status === s ? "var(--grid)" : "transparent", fontWeight: sp.status === s ? 600 : 400 }}>
+              {s.replace("_", " ")} {counts[s] ?? 0}
+            </Link>
+          ))}
+          <span className="mx-1" style={{ color: "var(--text-muted)" }}>·</span>
+          <Link href={qs({ active: showAll ? undefined : "all" })}
+            className="rounded-full border px-3 py-1"
+            style={{ borderColor: "var(--border-hairline)", background: showAll ? "var(--grid)" : "transparent" }}>
+            {showAll ? "Hiding retired" : "Include retired"}
+          </Link>
+        </div>
+        <form action={`/${slug}/creatives`}>
           {sp.status && <input type="hidden" name="status" value={sp.status} />}
           {sp.active && <input type="hidden" name="active" value={sp.active} />}
           <input
@@ -67,87 +122,57 @@ export default async function CreativesPage({
         </form>
       </div>
 
-      {/* status filter row */}
-      <div className="flex flex-wrap items-center gap-1 text-xs">
-        <Link href={qs({ status: undefined })}
-          className="rounded-full border px-3 py-1"
-          style={{ borderColor: "var(--border-hairline)", background: !sp.status ? "var(--grid)" : "transparent", fontWeight: !sp.status ? 600 : 400 }}>
-          All {showAll ? rows.length : activeCount}
-        </Link>
-        {STATUS_ORDER.map((s) => (
-          <Link key={s} href={qs({ status: s })}
-            className="rounded-full border px-3 py-1 capitalize"
-            style={{ borderColor: "var(--border-hairline)", background: sp.status === s ? "var(--grid)" : "transparent", fontWeight: sp.status === s ? 600 : 400 }}>
-            {s.replace("_", " ")} {counts[s] ?? 0}
-          </Link>
-        ))}
-        <span className="mx-2" style={{ color: "var(--text-muted)" }}>·</span>
-        <Link href={qs({ active: showAll ? undefined : "all" })}
-          className="rounded-full border px-3 py-1"
-          style={{ borderColor: "var(--border-hairline)", background: showAll ? "var(--grid)" : "transparent" }}>
-          {showAll ? "Showing all-time" : "Include inactive"}
-        </Link>
-      </div>
+      {filtered ? (
+        /* filtered view: one flat grid, still verdict-colored */
+        rows.length === 0
+          ? <p className="text-sm" style={{ color: "var(--text-muted)" }}>No creatives match these filters.</p>
+          : grid(rows)
+      ) : (
+        <>
+          {/* ===== 1 · Scale ===== */}
+          {scale.length > 0 && (
+            <>
+              <FadeIn>
+                <SectionHeader index="01" eyebrow="Scale" title="Feed these."
+                  meta={tierMeta(scale, baseline)} />
+              </FadeIn>
+              <FadeIn>{grid(scale)}</FadeIn>
+            </>
+          )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map((c) => (
-          <Link key={c.ad_id} href={`/${slug}/creatives/${c.ad_id}`}
-            className="card card-lift flex flex-col gap-2 p-4">
-            {c.asset_id && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`/api/v1/assets/${c.asset_id}/thumb`}
-                alt={c.asset_filename ?? c.ad_name}
-                loading="lazy"
-                className="h-32 w-full rounded-md object-cover"
-                style={{ background: "var(--grid)" }}
-              />
-            )}
-            <div className="flex items-start justify-between gap-2">
-              <span className="line-clamp-2 text-sm font-medium">{c.ad_name}</span>
-              <StatusChip status={c.status} muted={!c.active} />
-            </div>
-            <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-              {c.campaign} · {c.format} · {c.days_running}d {c.active ? "running" : "(inactive)"}
-            </div>
-            <div className="mt-1 grid grid-cols-3 gap-2 text-center">
-              <div>
-                <div className="text-sm font-semibold tabular">{inrCompact(c.spend)}</div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Spend</div>
-              </div>
-              <div>
-                <div className="text-sm font-semibold tabular">{ratio(c.roas)}×</div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>ROAS</div>
-              </div>
-              <div>
-                <div className="text-sm font-semibold tabular">{num(c.purchases)}</div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>Orders</div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div>
-                <div className="text-sm font-semibold tabular">{pct(c.ctr)}</div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>CTR</div>
-              </div>
-              <div>
-                <div className="text-sm font-semibold tabular">{c.purchases > 0 ? inr(c.cpa) : "—"}</div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>CPA</div>
-              </div>
-              <div>
-                <div className="text-sm font-semibold tabular">{inr(c.cpm)}</div>
-                <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>CPM</div>
-              </div>
-            </div>
-            {c.status_reasons.length > 0 && (
-              <div className="rounded-md px-2 py-1.5 text-xs" style={{ background: "var(--page)", color: "var(--text-secondary)" }}>
-                {c.status_reasons[0]}
-              </div>
-            )}
-          </Link>
-        ))}
-      </div>
-      {rows.length === 0 && (
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>No creatives match these filters.</p>
+          {/* ===== 2 · Fix or kill ===== */}
+          {bleed.length > 0 && (
+            <>
+              <FadeIn delay={0.05}>
+                <SectionHeader index="02" eyebrow="Fix or kill" title="Money is leaking here."
+                  meta={tierMeta(bleed, baseline)} />
+              </FadeIn>
+              <FadeIn delay={0.05}>{grid(bleed)}</FadeIn>
+            </>
+          )}
+
+          {/* ===== 3 · Watch ===== */}
+          {watch.length > 0 && (
+            <>
+              <FadeIn delay={0.05}>
+                <SectionHeader index="03" eyebrow="Watch" title="Let them cook."
+                  meta={tierMeta(watch, baseline)} />
+              </FadeIn>
+              <FadeIn delay={0.05}>{grid(watch, true)}</FadeIn>
+            </>
+          )}
+
+          {/* ===== Retired (opt-in) ===== */}
+          {retired.length > 0 && (
+            <>
+              <FadeIn delay={0.05}>
+                <SectionHeader index="04" eyebrow="Retired" title="The archive."
+                  meta={`${retired.length} creatives no longer running · judged on lifetime`} />
+              </FadeIn>
+              <FadeIn delay={0.05}>{grid(retired, true)}</FadeIn>
+            </>
+          )}
+        </>
       )}
     </div>
   );
