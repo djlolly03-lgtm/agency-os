@@ -78,8 +78,10 @@ export default async function OverviewPage({ params, searchParams }: {
   const rangeStart = periodSel ? periodSel.from : selectedMonth;
   const rangeEndRaw = periodSel ? periodSel.to : monthEnd;
   const rangeEnd = rangeEndRaw < dv.asOf ? rangeEndRaw : dv.asOf;
-  const funnel = await getFunnel(client.id, { from: rangeStart, to: rangeEnd });
-  const adRollups = await getAdRangeRollups(client.id, { from: rangeStart, to: rangeEnd });
+  const [funnel, adRollups] = await Promise.all([
+    getFunnel(client.id, { from: rangeStart, to: rangeEnd }),
+    getAdRangeRollups(client.id, { from: rangeStart, to: rangeEnd }),
+  ]);
   const periodLabel = periodSel
     ? periodSel.label
     : dv.isPartial ? "MTD" : monthLabel(selectedMonth.slice(0, 7));

@@ -5,6 +5,7 @@
  * "Today" is data-relative (latest ingested day), since data arrives via
  * manual daily exports rather than a live API.
  */
+import { cache } from "react";
 import { getDb } from "./db";
 
 // ---------- shared ----------
@@ -30,19 +31,21 @@ export function derive(m: {
 
 const N = (v: unknown) => Number(v ?? 0);
 
-export async function getClientBySlug(slug: string) {
+// cache() dedupes within a single request — layout and page both need the
+// client row and latest day, and each cost a Tokyo round trip if run twice.
+export const getClientBySlug = cache(async (slug: string) => {
   const db = await getDb();
   const rows = await db.query<{ id: string; name: string; slug: string; currency: string }>(
     `select id, name, slug, currency from clients where slug = $1`, [slug]);
   return rows[0] ?? null;
-}
+});
 
-export async function latestDay(clientId: string): Promise<string> {
+export const latestDay = cache(async (clientId: string): Promise<string> => {
   const db = await getDb();
   const [r] = await db.query<{ d: string }>(
     `select max(day)::text as d from unified_daily where client_id = $1`, [clientId]);
   return r?.d ?? new Date().toISOString().slice(0, 10);
-}
+});
 
 // ---------- overview ----------
 

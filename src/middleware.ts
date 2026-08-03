@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
 import { GATE_COOKIE, gateToken } from "@/lib/gate";
 
 export async function middleware(request: NextRequest) {
@@ -20,7 +19,10 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  return updateSession(request);
+  // Supabase auth session refresh (src/lib/supabase/middleware.ts) is parked
+  // until real logins ship — calling it here cost every navigation an extra
+  // network round trip to Supabase Auth for a no-op.
+  return NextResponse.next();
 }
 
 export const config = {
