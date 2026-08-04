@@ -5,15 +5,28 @@ import { inrCompact, num, pct } from "@/lib/format";
 import { shortMonth } from "@/lib/periods";
 import type { CohortRow } from "@/lib/shopify";
 
+function addMonths(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 8) + "01";
+}
+function monthDiff(a: string, b: string): number {
+  const [ay, am] = a.split("-").map(Number);
+  const [by, bm] = b.split("-").map(Number);
+  return (by - ay) * 12 + (bm - am);
+}
+
 /**
  * Cohort retention grid — "of the customers who first bought in month X, how
- * many bought again 1, 2, 3… months later." Leads with a plain-English
- * headline + the one comparison that matters (best vs worst cohort), then
- * the grid — same lead-with-the-story pattern as the other acts on this page.
+ * many bought again in each month since." Columns are real calendar months
+ * (not relative +1/+2), so each cohort row staircases in from its own signup
+ * month — ties directly to the same timeline as every other chart on the
+ * page. Leads with a plain-English headline + the one comparison that
+ * matters (best vs worst cohort), then the grid.
  */
 export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; maxOffset: number }) {
   if (!cohorts.length) return null;
-  const offsets = Array.from({ length: maxOffset + 1 }, (_, i) => i);
+  const firstCohort = cohorts[0].cohortMonth;
+  const calendarMonths = Array.from({ length: maxOffset + 1 }, (_, i) => addMonths(firstCohort, i));
 
   // month-1 retention: the one offset every cohort but the newest has —
   // the fairest single number to compare cohorts against each other
@@ -29,13 +42,14 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   };
 
+  // three readable tiers, moderate & consistent alpha — text stays light throughout
   const tierColor = (frac: number) => {
     if (avgM1 == null) return "var(--surface-2)";
-    if (frac >= avgM1 * 1.25) return "var(--status-good)";
-    if (frac >= avgM1 * 0.75) return "var(--brand)";
-    return "var(--brand-accent)";
+    if (frac >= avgM1 * 1.25) return "#2fd9ba";   // above average — teal-green
+    if (frac >= avgM1 * 0.75) return "#3987e5";   // around average — blue
+    return "#ef8c33";                             // below average — orange
   };
-  const tierOpacity = (frac: number) => Math.max(0.16, Math.min(frac * 2.2, 0.92));
+  const tierAlpha = (frac: number) => Math.round(Math.max(0.3, Math.min(0.28 + frac * 1.6, 0.72)) * 100);
 
   return (
     <SpotlightStage>
@@ -53,7 +67,7 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
               Avg. customers who buy again within a month
             </span>
             <div className="hero-number tabular num-gradient mt-1">
-              {avgM1 != null ? <><AnimatedNumber value={avgM1} format="pct" /></> : "—"}
+              {avgM1 != null ? <AnimatedNumber value={avgM1} format="pct" /> : "—"}
             </div>
             <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
               out of every 100 first-time buyers, about {avgM1 != null ? Math.round(avgM1 * 100) : "—"} come back within a month
@@ -62,25 +76,25 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
 
           {best && worst && best.c.cohortMonth !== worst.c.cohortMonth && (
             <div className="max-w-sm text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              <strong style={{ color: "var(--status-good)" }}>{shortMonth(best.c.cohortMonth)}</strong> buyers stick around
+              <strong style={{ color: "#2fd9ba" }}>{shortMonth(best.c.cohortMonth)}</strong> buyers stick around
               best — <strong style={{ color: "var(--text-primary)" }}>{pct(best.frac)}</strong> bought again within a month
               {(() => { const ar = avgRetention(best.c); return ar != null ? `, still ${pct(ar)} active on average since` : ""; })()}.{" "}
-              <strong style={{ color: "var(--brand-accent)" }}>{shortMonth(worst.c.cohortMonth)}</strong> is the weakest,
+              <strong style={{ color: "#ef8c33" }}>{shortMonth(worst.c.cohortMonth)}</strong> is the weakest,
               at just <strong style={{ color: "var(--text-primary)" }}>{pct(worst.frac)}</strong>.
             </div>
           )}
         </div>
 
-        {/* the grid */}
+        {/* the grid — real calendar months across the top, staircased */}
         <div className="mt-5 overflow-x-auto">
           <table className="w-full border-separate text-xs" style={{ borderSpacing: "4px" }}>
             <thead>
               <tr>
                 <th className="px-2 py-1 text-left font-semibold" style={{ color: "var(--text-secondary)" }}>Signed up</th>
                 <th className="px-2 py-1 text-right font-semibold" style={{ color: "var(--text-secondary)" }}>Customers</th>
-                {offsets.slice(1).map((o) => (
-                  <th key={o} className="px-1 py-1 text-center font-semibold" style={{ color: "var(--text-muted)" }}>
-                    +{o} mo
+                {calendarMonths.map((m) => (
+                  <th key={m} className="px-1 py-1 text-center font-semibold" style={{ color: "var(--text-muted)" }}>
+                    {shortMonth(m)}
                   </th>
                 ))}
               </tr>
@@ -94,26 +108,38 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
                     <td className="whitespace-nowrap rounded-l-md px-2 py-1.5 font-semibold"
                       style={{
                         color: "var(--text-primary)",
-                        borderLeft: isBest ? "3px solid var(--status-good)" : isWorst ? "3px solid var(--brand-accent)" : "3px solid transparent",
+                        borderLeft: isBest ? "3px solid #2fd9ba" : isWorst ? "3px solid #ef8c33" : "3px solid transparent",
                       }}>
                       {shortMonth(c.cohortMonth)}
-                      {isBest && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--status-good)" }}>stickiest</span>}
-                      {isWorst && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--brand-accent)" }}>weakest</span>}
+                      {isBest && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "#2fd9ba" }}>stickiest</span>}
+                      {isWorst && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "#ef8c33" }}>weakest</span>}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular" style={{ color: "var(--text-secondary)" }}>
                       {num(c.size)}
                     </td>
-                    {offsets.slice(1).map((o) => {
-                      const retained = c.retained[o];
-                      const revenue = c.revenue[o];
-                      if (retained == null) return <td key={o} />;
+                    {calendarMonths.map((m) => {
+                      const offset = monthDiff(c.cohortMonth, m);
+                      if (offset < 0 || offset >= c.retained.length) return <td key={m} />;
+                      const retained = c.retained[offset];
+                      if (retained == null) return <td key={m} />;
+                      if (offset === 0) {
+                        return (
+                          <td key={m} className="rounded-md text-center tabular"
+                            style={{ background: "var(--surface-2)", minWidth: 54, height: 36 }}
+                            title={`${shortMonth(c.cohortMonth)}: ${num(c.size)} first-time buyers signed up this month`}>
+                            <span style={{ color: "var(--text-muted)" }}>signup</span>
+                          </td>
+                        );
+                      }
                       const frac = retained / c.size;
+                      const revenue = c.revenue[offset];
                       return (
-                        <td key={o} className="rounded-md text-center tabular"
-                          style={{ background: tierColor(frac), opacity: 1, minWidth: 52, height: 34,
-                            backgroundImage: `linear-gradient(color-mix(in srgb, ${tierColor(frac)} ${Math.round(tierOpacity(frac) * 100)}%, var(--surface-1)), color-mix(in srgb, ${tierColor(frac)} ${Math.round(tierOpacity(frac) * 100)}%, var(--surface-1)))` }}
-                          title={`${shortMonth(c.cohortMonth)} cohort, ${o} month${o > 1 ? "s" : ""} later: ${num(retained)} of ${num(c.size)} bought again (${pct(frac)}) · ${inrCompact(revenue ?? 0)} revenue`}>
-                          <span className="font-bold" style={{ color: "#04211b" }}>{pct(frac, 0)}</span>
+                        <td key={m} className="rounded-md text-center tabular"
+                          style={{ background: `color-mix(in srgb, ${tierColor(frac)} ${tierAlpha(frac)}%, var(--surface-1))`, minWidth: 54, height: 36 }}
+                          title={`${shortMonth(c.cohortMonth)} cohort, in ${shortMonth(m)}: ${num(retained)} of ${num(c.size)} bought again (${pct(frac)}) · ${inrCompact(revenue ?? 0)} revenue`}>
+                          <span className="text-[13px] font-bold" style={{ color: "#ffffff", textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}>
+                            {pct(frac, 0)}
+                          </span>
                         </td>
                       );
                     })}
@@ -126,15 +152,15 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
 
         <div className="mt-3 flex flex-wrap items-center gap-4 text-[11px]" style={{ color: "var(--text-muted)" }}>
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--status-good)" }} /> above average
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#2fd9ba" }} /> above average
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--brand)" }} /> around average
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#3987e5" }} /> around average
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--brand-accent)" }} /> below average
+            <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#ef8c33" }} /> below average
           </span>
-          <span>· each row reads left to right: "of the people who bought for the first time this month, this % bought again N months later" · blank = too soon to tell</span>
+          <span>· columns are real calendar months · "signup" = the month they first bought · blank = too soon to tell</span>
         </div>
       </div>
     </SpotlightStage>
