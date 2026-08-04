@@ -7,6 +7,7 @@
  */
 import { cache } from "react";
 import { getDb } from "./db";
+import { getShopifyCustomerStats } from "./shopify";
 
 // ---------- shared ----------
 
@@ -647,6 +648,9 @@ export interface CustomerMonth {
   cacNew: number | null;            // paidSpend / newCustomers — the REAL acquisition cost
   ltv: number | null;               // AOV / (1 - repeatRate)  (geometric repeat model)
   ltvCac: number | null;            // ltv / cacNew
+  // real order-level stats (Shopify export) — null until ingested
+  newAov: number | null;
+  repeatAov: number | null;
 }
 
 /**
@@ -669,9 +673,12 @@ export async function getCustomerEconomics(clientId: string): Promise<CustomerMo
     `select to_char(date_trunc('month', day), 'YYYY-MM-01') as month, sum(spend) spend
      from unified_daily where client_id = $1 group by 1`, [clientId]);
   const spendBy = new Map(spendRows.map((r) => [String(r.month), N(r.spend)]));
+  const shopify = await getShopifyCustomerStats(clientId);
+  const shopifyByMonth = new Map((shopify?.byMonth ?? []).map((s) => [s.month, s]));
 
   return [...months].sort().map((month) => {
     const mm = byMonth.get(month) ?? new Map<string, number>();
+    const realAov = shopifyByMonth.get(month);
     let paidSpend = spendBy.get(month) ?? 0;
     // months without daily Google rows carry manual google_spend
     if (mm.has("google_spend")) paidSpend += mm.get("google_spend")!;
@@ -683,7 +690,8 @@ export async function getCustomerEconomics(clientId: string): Promise<CustomerMo
     if (!hasData) {
       return { month, hasData, newCustomers: newC, returningCustomers: retC,
         totalOrders, totalRevenue, paidSpend,
-        repeatRate: null, aov: null, cacNew: null, ltv: null, ltvCac: null };
+        repeatRate: null, aov: null, cacNew: null, ltv: null, ltvCac: null,
+        newAov: realAov?.newAov ?? null, repeatAov: realAov?.repeatAov ?? null };
     }
     const customers = newC! + retC!;
     const repeatRate = customers > 0 ? retC! / customers : 0;
@@ -692,8 +700,15 @@ export async function getCustomerEconomics(clientId: string): Promise<CustomerMo
     const ltv = repeatRate < 1 ? aov / (1 - repeatRate) : null;
     const ltvCac = ltv != null && cacNew != null && cacNew > 0 ? ltv / cacNew : null;
     return { month, hasData, newCustomers: newC, returningCustomers: retC,
-      totalOrders, totalRevenue, paidSpend, repeatRate, aov, cacNew, ltv, ltvCac };
+      totalOrders, totalRevenue, paidSpend, repeatRate, aov, cacNew, ltv, ltvCac,
+      newAov: realAov?.newAov ?? null, repeatAov: realAov?.repeatAov ?? null };
   });
+}
+
+/** Measured (right-censored) lifetime revenue-to-date per customer, from order-level data. */
+export async function getMeasuredLtv(clientId: string) {
+  const s = await getShopifyCustomerStats(clientId);
+  return s ? { ltv: s.ltvMeasured, customers: s.customers, orders: s.orders } : null;
 }
 
 // ---------- goals, pacing & forecast ----------

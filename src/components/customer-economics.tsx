@@ -14,7 +14,10 @@ const SOURCE = "Client-reported monthly counts + Shopify totals + paid spend · 
  *   LTV      = AOV ÷ (1 − repeat rate)   (geometric repeat model)
  *   LTV:CAC  = the agency's report card
  */
-export function CustomerEconomics({ months, slug }: { months: CustomerMonth[]; slug: string }) {
+export function CustomerEconomics({ months, slug, measuredLtv }: {
+  months: CustomerMonth[]; slug: string;
+  measuredLtv?: { ltv: number | null; customers: number; orders: number } | null;
+}) {
   const withData = months.filter((m) => m.hasData && m.ltvCac != null);
   const latest = withData[withData.length - 1];
   const prev = withData[withData.length - 2];
@@ -252,21 +255,70 @@ export function CustomerEconomics({ months, slug }: { months: CustomerMonth[]; s
             </div>
           </div>
 
-          {/* locked deeper splits — what better data unlocks */}
+          {/* new/repeat AOV split — real order-level data once ingested, locked until then */}
           <div className="grid grid-cols-2 gap-3">
-            {["New-customer AOV", "Repeat-customer AOV"].map((label) => (
-              <div key={label} className="flex items-center gap-2.5 rounded-xl border border-dashed px-3.5 py-3"
-                style={{ borderColor: "var(--border-hairline)" }}>
-                <Lock size={14} style={{ color: "var(--text-muted)" }} />
-                <div>
-                  <div className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{label}</div>
-                  <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    unlocks with the Shopify customer report
+            {([
+              { label: "New-customer AOV", value: latest.newAov, orders: latest.month, key: "new" as const },
+              { label: "Repeat-customer AOV", value: latest.repeatAov, orders: latest.month, key: "repeat" as const },
+            ]).map((s) =>
+              s.value != null ? (
+                <Explain key={s.key} block math={{
+                  title: `${s.label} · ${mLabel}`,
+                  steps: [
+                    { label: "Basis", value: s.key === "new" ? "orders in the month of a customer's first-ever purchase" : "orders from customers who'd already bought before" },
+                    { label: s.label, value: inr(s.value) },
+                    ...(s.key === "new" && latest.repeatAov != null ? [{ label: "Repeat-customer AOV", value: inr(latest.repeatAov) }] : []),
+                    ...(s.key === "repeat" && latest.newAov != null ? [{ label: "New-customer AOV", value: inr(latest.newAov) }] : []),
+                  ],
+                  formula: `${s.label} = order revenue ÷ order count, ${s.key === "new" ? "first-purchase" : "repeat"} orders only`,
+                  note: "Measured from the Shopify order-level export — real, not modelled.",
+                  source: "Shopify order export · Sheets → Supabase",
+                  link: { href: `/${slug}/monthly`, label: "Monthly report →" },
+                }}>
+                  <div className="rounded-xl border px-3.5 py-3" style={{ borderColor: "var(--border-hairline)" }}>
+                    <div className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{s.label}</div>
+                    <div className="mt-0.5 text-lg font-bold tabular">{inr(s.value)}</div>
+                  </div>
+                </Explain>
+              ) : (
+                <div key={s.key} className="flex items-center gap-2.5 rounded-xl border border-dashed px-3.5 py-3"
+                  style={{ borderColor: "var(--border-hairline)" }}>
+                  <Lock size={14} style={{ color: "var(--text-muted)" }} />
+                  <div>
+                    <div className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>{s.label}</div>
+                    <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                      unlocks with the Shopify customer report
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
+
+          {measuredLtv?.ltv != null && (
+            <Explain block math={{
+              title: "Measured LTV (revenue-to-date per customer)",
+              steps: [
+                { label: "Total customers observed", value: num(measuredLtv.customers) },
+                { label: "Total orders observed", value: num(measuredLtv.orders) },
+                { label: "Total revenue across all orders", value: inrCompact(measuredLtv.ltv * measuredLtv.customers) },
+              ],
+              formula: `measured LTV = total revenue ÷ customers = ${inr(measuredLtv.ltv)}`,
+              note: "This is revenue booked so far, not a lifetime forecast — customers acquired recently haven't had time to repeat, so this number understates true LTV and will climb as the order history lengthens. ~12% of orders had no email on file and count as one-off anonymous customers, which also pulls this down slightly. The derived LTV above (AOV ÷ (1 − repeat rate)) is the forward-looking estimate.",
+              source: "Shopify order export · Sheets → Supabase",
+            }}>
+              <div className="rounded-xl border px-3.5 py-3" style={{ borderColor: "var(--border-hairline)" }}>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                    Measured LTV · revenue-to-date
+                  </span>
+                  <span className="text-lg font-bold tabular">{inr(measuredLtv.ltv)}</span>
+                </div>
+                <p className="mt-0.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  across {num(measuredLtv.customers)} customers, {num(measuredLtv.orders)} orders · right-censored, climbs over time
+                </p>
+              </div>
+            </Explain>
+          )}
 
           {/* data coverage strip — unlit months link straight to the editor */}
           <div>

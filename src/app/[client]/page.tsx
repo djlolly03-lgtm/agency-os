@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   getClientBySlug, getOverview, getTimeseries, getCreatives, getPacing, getDivisionOverview, getMonths,
   getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
-  getCustomerEconomics,
+  getCustomerEconomics, getMeasuredLtv,
 } from "@/lib/queries";
 import { CustomerEconomics } from "@/components/customer-economics";
 import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar, buildSeasonCalendar } from "@/lib/seasons";
@@ -59,7 +59,7 @@ export default async function OverviewPage({ params, searchParams }: {
   const prevMonthEnd = new Date(Date.UTC(
     Number(selectedMonth.slice(0, 4)), Number(selectedMonth.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10);
 
-  const [ov, daily, weekly, monthly, creatives, pacing, dv, heatDays, goalRows, nameRollups, custMonths] = await Promise.all([
+  const [ov, daily, weekly, monthly, creatives, pacing, dv, heatDays, goalRows, nameRollups, custMonths, measuredLtv] = await Promise.all([
     getOverview(client.id),
     getTimeseries(client.id, "day"),
     getTimeseries(client.id, "week"),
@@ -73,6 +73,7 @@ export default async function OverviewPage({ params, searchParams }: {
     getGoals(client.id, selectedMonth),
     getMonthlyNameRollups(client.id),
     getCustomerEconomics(client.id),
+    getMeasuredLtv(client.id),
   ]);
 
   const rangeStart = periodSel ? periodSel.from : selectedMonth;
@@ -524,7 +525,7 @@ export default async function OverviewPage({ params, searchParams }: {
       </FadeIn>
       <FadeIn delay={0.05}>
         <SpotlightStage>
-          <CustomerEconomics months={custMonths} slug={slug} />
+          <CustomerEconomics months={custMonths} slug={slug} measuredLtv={measuredLtv} />
         </SpotlightStage>
       </FadeIn>
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runSheetSync } from "@/lib/sync";
 import { indexDriveAssets } from "@/lib/drive-index";
+import { ingestShopifyOrders } from "@/lib/shopify";
 
 export const maxDuration = 300;
 
@@ -22,7 +23,11 @@ export async function POST(req: Request) {
     if (process.env.DRIVE_FOLDER_ID) {
       drive = await indexDriveAssets("organik-truck");
     }
-    return NextResponse.json({ data: { sheet, drive } });
+    let shopify: unknown = null;
+    if (process.env.CUSTOMER_DATA_SHEET_ID) {
+      shopify = await ingestShopifyOrders("organik-truck");
+    }
+    return NextResponse.json({ data: { sheet, drive, shopify } });
   } catch (e) {
     console.error("[sync]", e);
     return NextResponse.json({ error: String(e) }, { status: 500 });
