@@ -5,6 +5,8 @@ import {
   getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
   getCustomerEconomics, getMeasuredLtv,
 } from "@/lib/queries";
+import { getCohortRetention } from "@/lib/shopify";
+import { CohortRetention } from "@/components/cohort-retention";
 import { CustomerEconomics } from "@/components/customer-economics";
 import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar, buildSeasonCalendar } from "@/lib/seasons";
 import { SeasonRadar } from "@/components/season-radar";
@@ -75,6 +77,7 @@ export default async function OverviewPage({ params, searchParams }: {
     getCustomerEconomics(client.id),
     getMeasuredLtv(client.id),
   ]);
+  const cohortData = await getCohortRetention(client.id);
 
   const rangeStart = periodSel ? periodSel.from : selectedMonth;
   const rangeEndRaw = periodSel ? periodSel.to : monthEnd;
@@ -528,6 +531,19 @@ export default async function OverviewPage({ params, searchParams }: {
           <CustomerEconomics months={custMonths} slug={slug} measuredLtv={measuredLtv} />
         </SpotlightStage>
       </FadeIn>
+
+      {/* ===== Cohort retention ===== */}
+      {cohortData && cohortData.cohorts.length > 1 && (
+        <>
+          <FadeIn delay={0.05}>
+            <SectionHeader index={num2()} eyebrow="Cohorts" title="Who comes back, and when."
+              meta="signup month × months since — from the Shopify order history" />
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <CohortRetention cohorts={cohortData.cohorts} maxOffset={cohortData.maxOffset} />
+          </FadeIn>
+        </>
+      )}
 
       {/* ===== INSIGHTS (scoped to selection) ===== */}
       <FadeIn delay={0.05}>

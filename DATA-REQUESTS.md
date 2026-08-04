@@ -76,18 +76,24 @@ and how much effort it takes. Priority order.
   year vs last). Worth a recurring 10-min check-in each quarter against
   `src/lib/seasons.ts`, not a single sign-off.
 
-### 12. Division mapping spot-check — 🚩 found a real issue (3 Aug)
+### 12. Division mapping spot-check — 🚩 real issue found, PENDING on the team (3 Aug)
 - Cross-checked our auto-classified Fruits & Veggies vs Groceries split against
   the client-reported numbers in tab 7 for Apr–Jun — they don't match (our
   Groceries revenue reads roughly a third of what's reported).
-- **Root cause found:** *"Apro Campaign"* (₹96.2k spend, Apr–Jun) is classified
-  as Fruits & Veggies by our name-based rule but is probably a grocery/pantry
-  line — need to know what "Apro" actually is to fix the classifier correctly.
-  Separately, *"Performance Max-1 Only feed"* and *"...TG"* (~₹113k combined)
-  run Google's full product feed, so they're structurally mixed — can't be
-  split by campaign name at all without Google's per-product reporting.
-- **Ask:** what is "Apro"? And is per-product Google reporting something we
-  could ever get (asset-group level), or is campaign-level the ceiling?
+- **"Apro Campaign" is correctly classified** — Sandeep confirmed it's Apricot,
+  a fruit. Not the issue.
+- **Checked all 51 campaigns by name** (not just the top spenders) — every other
+  campaign classifies correctly too, except one immaterial one ("Tomato Ketchup",
+  ~₹4.5k revenue — a grocery item currently bucketed as F&V, too small to matter).
+- **Real driver:** *"Performance Max-1 Only feed"* and *"...TG"* did **₹5.7L
+  combined revenue in Apr–Jun**, currently counted 100% as Fruits & Veggies.
+  These are Google Performance Max campaigns running the *entire product feed*
+  in one campaign — structurally mixed, can't be split by campaign name at all.
+- **Question sent to the team (3 Aug):** can Google Ads pull a product-level or
+  asset-group-level breakdown for these two campaigns, so Fruits & Veggies vs
+  Groceries revenue can be split correctly? If Google doesn't expose that for
+  Performance Max, this becomes a permanent limitation rather than an open bug.
+- **Status: pending team's answer.** No classifier changes made.
 
 ---
 

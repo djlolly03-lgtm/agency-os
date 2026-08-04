@@ -127,3 +127,77 @@ export async function getShopifyCustomerStats(clientId: string): Promise<Shopify
     ltvMeasured, customers: custTotal.size, orders: rows.length,
   };
 }
+
+function monthOffset(from: string, months: number): string {
+  const [y, m] = from.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + months, 1));
+  return d.toISOString().slice(0, 8) + "01";
+}
+function monthDiff(a: string, b: string): number {
+  const [ay, am] = a.split("-").map(Number);
+  const [by, bm] = b.split("-").map(Number);
+  return (by - ay) * 12 + (bm - am);
+}
+
+export interface CohortRow {
+  cohortMonth: string;
+  size: number;                          // customers first-acquired this month
+  retained: (number | null)[];           // index i = customers still buying at month i (i=0 always = size)
+  revenue: (number | null)[];            // revenue from this cohort at month i
+}
+
+/**
+ * Classic cohort retention grid: rows = signup month, columns = months since
+ * signup. Cell = how many of that cohort bought again that many months later.
+ */
+export async function getCohortRetention(clientId: string): Promise<{ cohorts: CohortRow[]; maxOffset: number } | null> {
+  const db = await getDb();
+  const rows = await db.query<{ customer_key: string; day: string; total: number }>(
+    `select customer_key, day::text as day, total from shopify_orders where client_id = $1`, [clientId]);
+  if (!rows.length) return null;
+
+  const firstOrder = new Map<string, string>();
+  for (const r of rows) {
+    const cur = firstOrder.get(r.customer_key);
+    if (!cur || r.day < cur) firstOrder.set(r.customer_key, r.day);
+  }
+  const cohortOf = new Map<string, string>();
+  for (const [k, d] of firstOrder) cohortOf.set(k, d.slice(0, 8) + "01");
+
+  // per customer, per calendar month: order count + revenue
+  const byCustomerMonth = new Map<string, Map<string, number>>();
+  let latestMonth = "0000-00-00";
+  for (const r of rows) {
+    const month = r.day.slice(0, 8) + "01";
+    if (month > latestMonth) latestMonth = month;
+    if (!byCustomerMonth.has(r.customer_key)) byCustomerMonth.set(r.customer_key, new Map());
+    const m = byCustomerMonth.get(r.customer_key)!;
+    m.set(month, (m.get(month) ?? 0) + N(r.total));
+  }
+
+  const cohortMonths = [...new Set(cohortOf.values())].sort();
+  const custByCohort = new Map<string, string[]>();
+  for (const [k, c] of cohortOf) custByCohort.set(c, [...(custByCohort.get(c) ?? []), k]);
+
+  let maxOffset = 0;
+  const cohorts: CohortRow[] = cohortMonths.map((cohortMonth) => {
+    const custs = custByCohort.get(cohortMonth)!;
+    const span = monthDiff(cohortMonth, latestMonth);
+    maxOffset = Math.max(maxOffset, span);
+    const retained: (number | null)[] = [];
+    const revenue: (number | null)[] = [];
+    for (let i = 0; i <= span; i++) {
+      const target = monthOffset(cohortMonth, i);
+      let count = 0, rev = 0;
+      for (const c of custs) {
+        const v = byCustomerMonth.get(c)?.get(target);
+        if (v != null) { count++; rev += v; }
+      }
+      retained.push(count);
+      revenue.push(rev);
+    }
+    return { cohortMonth, size: custs.length, retained, revenue };
+  });
+
+  return { cohorts, maxOffset };
+}
