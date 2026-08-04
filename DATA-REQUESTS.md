@@ -7,50 +7,40 @@ and how much effort it takes. Priority order.
 
 ## P1 — High value, minutes of effort
 
-### 1. Monthly customer counts (new vs returning) — Feb 2026 → today
-- **Have:** Dec 2025 and Jan 2026 only.
-- **Missing:** Feb, Mar, Apr, May, Jun, Jul.
-- **Unlocks:** the Customer Engine for all 9 months — LTV:CAC trend, repeat-rate trend,
-  new-customer growth curve. Right now 7 of 9 months are dark.
-- **How:** Shopify Analytics → Customers → "First-time vs returning" per month.
-  Two numbers per month, entered on the dashboard's Internal page (each empty month
-  chip on the Customer Engine links straight to the right form).
+### 1. Monthly customer counts (new vs returning) — ✅ RECEIVED (3 Aug)
+- **Status:** all 9 months loaded (Nov '25 – Jul '26), from the "Organik Truck data"
+  sheet's tab 1. Customer Engine is now fully lit.
 
 ### 2. Offline sales — monthly number
-- **Have:** nothing ("awaiting client number" on the dashboard).
+- **Have:** nothing yet — confirmed still pending on the client's side.
 - **Unlocks:** the Online vs Offline split at the top of the overview.
 - **How:** one ₹ figure per month from the client, entered on the Internal page.
 
-### 3. Real monthly targets
-- **Have:** none — the dashboard assumes "last month +25%" everywhere (marked with *).
-- **Unlocks:** honest pacing, projections, and goal-attainment insights.
-- **How:** Internal page → Goals; 3 numbers a month (revenue / spend / orders).
+### 3. Real monthly targets — ✅ RECEIVED (3 Aug)
+- **Status:** revenue/spend/orders targets loaded for Jan–Jul from tab 3
+  ("Expected Numbers"). Pacing and goal-attainment now compare against real
+  targets instead of the "+25%" default. August target not yet set.
 
 ### 4. Creatives Drive folder share — ✅ RECEIVED (30 Jul)
-- **Status:** folder indexed — 408 files, 145 of 360 ads auto-matched (111 exact + 34 fuzzy).
-  Thumbnails are live on the dashboard; the daily sync re-indexes and re-matches
-  automatically, so the match rate climbs as the team's naming alignment lands.
-- **Remaining:** unmatched ads can be linked by hand on the Internal page's matching queue.
+- **Status:** folder indexed — climbing daily as the team's naming alignment lands
+  (149 → 150+ ads auto-matched and rising). Unmatched ads can be linked by hand
+  on the Internal page's matching queue.
 
 ---
 
 ## P2 — High value, one-time exports
 
-### 5. Shopify customer-level order export (one-time, then monthly)
-- **Have:** only monthly aggregates.
-- **Unlocks:** **new-customer AOV vs repeat-customer AOV** (currently shown as locked),
-  measured LTV (replacing the derived model), cohort retention, purchase-frequency
-  distribution. This is the single biggest unlock left.
-- **How:** Shopify → Orders export with customer email/ID column (CSV). We add a tab
-  or upload; the pipeline does the rest.
+### 5. Shopify customer-level order export — ✅ RECEIVED (3 Aug)
+- **Status:** 7,098 order-level rows ingested (tab 5, "Shopify Extract"), Nov '25–Jul
+  '26. New-customer AOV and repeat-customer AOV are now real and unlocked on the
+  Customer Engine, plus a measured (revenue-to-date) LTV alongside the derived model.
+  ~12% of orders had no email on file and count as one-off anonymous customers —
+  worth asking Shopify/checkout settings whether email can be made required.
 
-### 6. Google Ads history before May 2026 (daily, campaign-level)
-- **Have:** Dec–Apr Google exists only as one monthly number per month.
-- **Missing:** daily rows for Dec 2025 – Apr 2026.
-- **Unlocks:** accurate daily trends/heatmap for those months, campaign drill-downs,
-  proper same-days deltas.
-- **How:** Google Ads → Reports → daily campaign report for the period → paste into
-  "Raw Data - Google" (same format as today).
+### 6. Google Ads history before May 2026 — mostly ✅ RECEIVED (3 Aug)
+- **Status:** tab 6 ("Google data") supplied daily rows from 15 Dec 2025 onward;
+  ingested for the Dec 15 – Apr 30 gap (153 campaign-days). Dec 1–14 2025 still
+  has no daily Google rows if that week's export exists — worth double-checking.
 
 ---
 
@@ -71,24 +61,37 @@ and how much effort it takes. Priority order.
   creative gallery or funnel.
 - **How:** switch the Google daily report to ad/asset granularity (same paste flow).
 
-### 10. November 2025 store totals
-- **Missing:** the Nov Dashboard block has Meta only — no store total, orders, or organic.
+### 10. November 2025 store total
+- **Missing:** still no genuine Shopify store total for Nov '25 (the "Achieved"
+  column in tab 3 mirrors our own computed Meta numbers, not a store total).
 - **Unlocks:** completes the monthly report and organic history back to day one.
 
 ---
 
-## P4 — Validation (no new data, just review)
+## P4 — Validation
 
 ### 11. Season windows sign-off
-- The dashboard's produce season calendar (mango Mar–Jul, litchi May–Jul, ponkh
-  Dec–Feb, etc.) uses our India-market estimates. 10 minutes with the procurement
-  team against `src/lib/seasons.ts` sharpens every seasonal insight.
+- Ongoing, not a one-time fix — needs input from sales + farmers as the actual
+  season windows shift year to year (mango moved from ~April to mid-month this
+  year vs last). Worth a recurring 10-min check-in each quarter against
+  `src/lib/seasons.ts`, not a single sign-off.
 
-### 12. Division mapping spot-check
-- Campaigns are auto-classified Fruits & Veggies vs Groceries by name. Worth a
-  once-over (e.g. old "Performance Max-1" campaigns default to F&V).
+### 12. Division mapping spot-check — 🚩 found a real issue (3 Aug)
+- Cross-checked our auto-classified Fruits & Veggies vs Groceries split against
+  the client-reported numbers in tab 7 for Apr–Jun — they don't match (our
+  Groceries revenue reads roughly a third of what's reported).
+- **Root cause found:** *"Apro Campaign"* (₹96.2k spend, Apr–Jun) is classified
+  as Fruits & Veggies by our name-based rule but is probably a grocery/pantry
+  line — need to know what "Apro" actually is to fix the classifier correctly.
+  Separately, *"Performance Max-1 Only feed"* and *"...TG"* (~₹113k combined)
+  run Google's full product feed, so they're structurally mixed — can't be
+  split by campaign name at all without Google's per-product reporting.
+- **Ask:** what is "Apro"? And is per-product Google reporting something we
+  could ever get (asset-group level), or is campaign-level the ceiling?
 
 ---
 
-*Resolved this week (no action needed): store totals + organic now sync daily from the
-Dashboard tab; pre-May Google monthlies folded into all paid totals; funnel labels audited.*
+*Resolved (no action needed): store totals + organic sync daily from the
+Dashboard tab; pre-May Google monthlies folded into all paid totals; funnel
+labels audited; creative thumbnails self-heal (Drive link expiry fixed);
+cross-region latency fixed (functions moved to Tokyo, next to the database).*
