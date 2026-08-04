@@ -320,23 +320,60 @@ export function CustomerEconomics({ months, slug, measuredLtv }: {
             </Explain>
           )}
 
-          {/* data coverage strip — unlit months link straight to the editor */}
+          {/* data coverage strip — unlit months link straight to the editor,
+              and say in plain words exactly what's missing and why. The
+              most recent month is always treated as "too new" regardless of
+              which fields happen to be null — a few days of partial spend
+              data doesn't mean the month is meaningfully "in". */}
           <div>
             <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-              Customer-data coverage · {withData.length}/{months.length} months
+              Customer-data coverage · {withData.length} of {months.length} months complete
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {months.map((m) => (
-                <Link key={m.month} href={`/${slug}/internal?month=${m.month.slice(0, 7)}`}
-                  title={`${monthLabel(m.month.slice(0, 7))} — ${m.hasData ? "data present · click to edit" : "click to add customer counts"}`}
-                  className="flex h-7 items-center rounded-md px-2 text-[10px] font-bold transition-transform hover:scale-105"
-                  style={m.hasData
-                    ? { background: "color-mix(in srgb, var(--brand) 25%, transparent)", color: "var(--text-primary)" }
-                    : { background: "var(--grid)", color: "var(--text-muted)", border: "1px dashed var(--border-hairline)" }}>
-                  {monthLabel(m.month.slice(0, 7)).split(" ")[0]}
-                </Link>
-              ))}
+              {months.map((m) => {
+                const isLatest = m.month === months[months.length - 1].month;
+                const hasCounts = m.newCustomers != null && m.returningCustomers != null;
+                const hasStoreTotal = m.totalOrders != null && m.totalRevenue != null;
+                const reason = m.hasData ? null
+                  : isLatest ? "this month just started — check back once it closes"
+                  : hasCounts && !hasStoreTotal ? "missing the Shopify store total"
+                  : !hasCounts && hasStoreTotal ? "missing new/returning customer counts"
+                  : "no data reported yet";
+                return (
+                  <Link key={m.month} href={`/${slug}/internal?month=${m.month.slice(0, 7)}`}
+                    title={`${monthLabel(m.month.slice(0, 7))} — ${m.hasData ? "complete · click to edit" : reason}`}
+                    className="flex h-7 items-center rounded-md px-2 text-[10px] font-bold transition-transform hover:scale-105"
+                    style={m.hasData
+                      ? { background: "color-mix(in srgb, var(--brand) 25%, transparent)", color: "var(--text-primary)" }
+                      : { background: "var(--grid)", color: "var(--text-muted)", border: "1px dashed var(--border-hairline)" }}>
+                    {monthLabel(m.month.slice(0, 7)).split(" ")[0]}
+                  </Link>
+                );
+              })}
             </div>
+            {(() => {
+              const missing = months.filter((m) => !m.hasData).map((m) => {
+                const isLatest = m.month === months[months.length - 1].month;
+                const hasCounts = m.newCustomers != null && m.returningCustomers != null;
+                const hasStoreTotal = m.totalOrders != null && m.totalRevenue != null;
+                const reason = isLatest ? "just too new — it'll fill in once the month closes"
+                  : hasCounts && !hasStoreTotal ? "missing the Shopify store total"
+                  : !hasCounts && hasStoreTotal ? "missing customer counts"
+                  : "has no data reported yet";
+                return { month: m.month, reason };
+              });
+              if (!missing.length) return null;
+              return (
+                <p className="mt-2 text-[11px] leading-5" style={{ color: "var(--text-muted)" }}>
+                  {missing.map((m, i) => (
+                    <span key={m.month}>
+                      {i > 0 && " · "}
+                      <strong style={{ color: "var(--text-secondary)" }}>{monthLabel(m.month.slice(0, 7))}</strong> is {m.reason}
+                    </span>
+                  ))}. Every other month above is fully in — nothing else to chase.
+                </p>
+              );
+            })()}
           </div>
 
           <p className="text-[11px] leading-4" style={{ color: "var(--text-muted)" }}>
