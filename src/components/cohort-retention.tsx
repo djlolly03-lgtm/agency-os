@@ -126,9 +126,7 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
                         return (
                           <td key={m} className="rounded-md text-center tabular"
                             style={{ background: "var(--surface-2)", minWidth: 54, height: 36 }}
-                            title={`${shortMonth(c.cohortMonth)}: ${num(c.size)} first-time buyers signed up this month`}>
-                            <span style={{ color: "var(--text-muted)" }}>signup</span>
-                          </td>
+                            title={`${shortMonth(c.cohortMonth)}: ${num(c.size)} first-time buyers signed up this month`} />
                         );
                       }
                       const frac = retained / c.size;
