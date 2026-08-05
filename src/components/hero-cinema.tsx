@@ -167,7 +167,10 @@ export function SpotlightStage({ children, radius = 20 }: {
  * rising from the stage floor. Nearly invisible dormant; vivid when lit.
  */
 function SkylineField({ values, lit }: { values: number[]; lit: boolean }) {
-  if (values.length < 2) return null;
+  // fewer than ~a week of bars spreads out across the full-width SVG with
+  // huge gaps between them — reads as a rendering glitch, not a skyline.
+  // Early in a new month, just skip the bars and keep the plain gradient.
+  if (values.length < 8) return null;
   const W = 1200, H = 400;
   const max = Math.max(...values, 1);
   const gap = W / values.length;
