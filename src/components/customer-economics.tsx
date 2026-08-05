@@ -319,6 +319,13 @@ export function CustomerEconomics({ months, slug, measuredLtv }: {
               </div>
             </Explain>
           )}
+          {measuredLtv?.ltv != null && latest.ltv != null && (
+            <p className="text-[11px] leading-4" style={{ color: "var(--text-muted)" }}>
+              Two ways to price a customer: <strong style={{ color: "var(--text-secondary)" }}>Derived</strong> projects
+              forward from this month&rsquo;s repeat rate. <strong style={{ color: "var(--text-secondary)" }}>Measured</strong> is
+              real revenue booked so far — it climbs as order history lengthens.
+            </p>
+          )}
 
           {/* data coverage strip — unlit months link straight to the editor,
               and say in plain words exactly what's missing and why. The

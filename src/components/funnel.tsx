@@ -122,7 +122,7 @@ export function Funnel({ stages, title, subtitle, footer }: {
 
           {/* conversion pills riding the slopes */}
           {connectors.map((c, i) => {
-            const label = pct(c.rate, c.rate < 0.01 ? 2 : 1);
+            const label = pct(c.rate, c.rate < 0.01 ? 2 : 1) + (c.rate > 1 ? "*" : "");
             const w = label.length * 7.5 + 22;
             return (
               <g key={i} className="funnel-piece" style={{ animationDelay: `${i * 110 + 150}ms` }}>
@@ -147,6 +147,12 @@ export function Funnel({ stages, title, subtitle, footer }: {
       </div>
       {footer && (
         <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{footer}</p>
+      )}
+      {connectors.some((c) => c.rate > 1) && (
+        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+          * Meta counts a purchase across a wider attribution window than the step before it — a stage can read
+          above 100%. Not an error.
+        </p>
       )}
     </div>
   );

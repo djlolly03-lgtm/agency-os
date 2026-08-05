@@ -7,6 +7,7 @@ import {
 } from "@/lib/queries";
 import { getCohortRetention } from "@/lib/shopify";
 import { CohortRetention } from "@/components/cohort-retention";
+import { ExecSummary } from "@/components/exec-summary";
 import { CustomerEconomics } from "@/components/customer-economics";
 import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar, buildSeasonCalendar } from "@/lib/seasons";
 import { SeasonRadar } from "@/components/season-radar";
@@ -48,8 +49,12 @@ export default async function OverviewPage({ params, searchParams }: {
 
   // ---- selection: a month (the atom) or a wider period ----
   const periodSel = sp.period ? periods.find((p) => p.key === sp.period) ?? null : null;
+  // default to the last COMPLETE month, not the in-progress one — a day-2
+  // MTD number reads as "revenue collapsed" before you realize why. The
+  // current month stays one click away via its own chip.
+  const defaultMonth = months.length > 1 ? months[1] : months[0];
   const selectedMonth = !periodSel && sp.month && months.includes(sp.month + "-01")
-    ? sp.month + "-01" : months[0];
+    ? sp.month + "-01" : defaultMonth;
   const isMonthMode = !periodSel;
   const selectedKey = periodSel ? periodSel.key : selectedMonth.slice(0, 7);
   const isCurrent = isMonthMode && selectedMonth === months[0];
@@ -410,6 +415,11 @@ export default async function OverviewPage({ params, searchParams }: {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ===== 3-line summary — the verdict, before the numbers ===== */}
+      <FadeIn>
+        <ExecSummary insights={insights} periodLabel={periodLabel} clientName={client.name} />
+      </FadeIn>
+
       {/* ===== CINEMA HERO — full-bleed, spotlight reveals the data ===== */}
       <div className="-mt-32 sm:-mt-24">
         <HeroCinema skyline={sparkRevenue}>
@@ -618,6 +628,7 @@ export default async function OverviewPage({ params, searchParams }: {
       )}
 
       {/* ===== Seasons ===== */}
+      <div id="seasons" style={{ scrollMarginTop: "100px" }} />
       <FadeIn delay={0.05}>
         <SectionHeader index={num2()} eyebrow="Seasons" title="Selling what nature ships"
           meta="produce windows vs actual sales · India seasons" />

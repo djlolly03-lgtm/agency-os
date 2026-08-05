@@ -29,7 +29,7 @@ export default async function MonthlyPage({ params }: { params: Promise<{ client
         <table className="w-full text-sm tabular">
           <thead>
             <tr className="text-left text-xs" style={{ color: "var(--text-muted)" }}>
-              {["Month", "Spend", "Meta rev", "Google rev", "Organic rev", "Store revenue", "Orders", "AOV", "CAC", "Blended ROAS"].map((h) => (
+              {["Month", "Spend", "Meta rev", "Google rev", "Organic rev", "Store revenue", "Orders", "AOV", "Blended CPA", "Blended ROAS"].map((h) => (
                 <th key={h} className="px-4 py-3 font-medium">{h}</th>
               ))}
             </tr>

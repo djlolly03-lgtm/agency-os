@@ -16,9 +16,11 @@ const SERIES: Record<string, string> = {
   google: "var(--series-2)",
 };
 
-export function TrendChart({ daily, weekly, monthly }: { daily: Row[]; weekly: Row[]; monthly: Row[] }) {
-  const [grain, setGrain] = useState<Grain>("week");
-  const [metric, setMetric] = useState<Metric>("spend");
+export function TrendChart({ daily, weekly, monthly, defaultGrain = "week", defaultMetric = "spend" }: {
+  daily: Row[]; weekly: Row[]; monthly: Row[]; defaultGrain?: Grain; defaultMetric?: Metric;
+}) {
+  const [grain, setGrain] = useState<Grain>(defaultGrain);
+  const [metric, setMetric] = useState<Metric>(defaultMetric);
   const source = grain === "day" ? daily : grain === "week" ? weekly : monthly;
 
   const data = useMemo(() => {
