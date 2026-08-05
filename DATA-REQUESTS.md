@@ -11,10 +11,11 @@ and how much effort it takes. Priority order.
 - **Status:** all 9 months loaded (Nov '25 – Jul '26), from the "Organik Truck data"
   sheet's tab 1. Customer Engine is now fully lit.
 
-### 2. Offline sales — monthly number
-- **Have:** nothing yet — confirmed still pending on the client's side.
-- **Unlocks:** the Online vs Offline split at the top of the overview.
-- **How:** one ₹ figure per month from the client, entered on the Internal page.
+### 2. Offline sales — monthly number — ✅ RECEIVED (4 Aug)
+- **Status:** all 9 months loaded (Nov '25–Jul '26) from the "2. Offline orders" tab in
+  the customer-data sheet. Online vs Offline split is fully live everywhere.
+- **Bonus:** this tab's "Online Numbers" column also gave us the Nov '25 store
+  revenue, which had been missing since day one — see item #10, mostly resolved.
 
 ### 3. Real monthly targets — ✅ RECEIVED (3 Aug)
 - **Status:** revenue/spend/orders targets loaded for Jan–Jul from tab 3
@@ -61,10 +62,13 @@ and how much effort it takes. Priority order.
   creative gallery or funnel.
 - **How:** switch the Google daily report to ad/asset granularity (same paste flow).
 
-### 10. November 2025 store total
-- **Missing:** still no genuine Shopify store total for Nov '25 (the "Achieved"
-  column in tab 3 mirrors our own computed Meta numbers, not a store total).
-- **Unlocks:** completes the monthly report and organic history back to day one.
+### 10. November 2025 store total — mostly ✅ RESOLVED (4 Aug)
+- **Status:** Nov '25 store revenue (₹2.72L) landed as a side-effect of the
+  Offline-orders tab update (its "Online Numbers" column matches our totals
+  for every other month to the rupee, so we trust the Nov figure too).
+- **Still missing:** Nov '25 store *order count* specifically — nobody's sent
+  that number, so the Customer Engine coverage strip still shows Nov as
+  incomplete (LTV:CAC needs orders for AOV). One number away from fully closed.
 
 ---
 
