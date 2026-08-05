@@ -420,8 +420,13 @@ export default async function OverviewPage({ params, searchParams }: {
         <ExecSummary insights={insights} periodLabel={periodLabel} clientName={client.name} />
       </FadeIn>
 
-      {/* ===== CINEMA HERO — full-bleed, spotlight reveals the data ===== */}
-      <div className="-mt-32 sm:-mt-24">
+      {/* ===== CINEMA HERO — full-bleed, spotlight reveals the data =====
+          No negative margin here anymore: that trick pulled the hero up to
+          bleed behind the fixed nav when the hero was the page's first
+          element. Now the exec summary sits above it in normal flow, so
+          pulling the hero up would drag it over the summary's lower lines
+          instead — exactly what was happening. */}
+      <div>
         <HeroCinema skyline={sparkRevenue}>
           <div className="flex min-h-[100dvh] flex-col pb-10 pt-24 sm:pt-28">
             {/* headline */}
