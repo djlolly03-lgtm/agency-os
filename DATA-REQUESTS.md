@@ -80,28 +80,30 @@ and how much effort it takes. Priority order.
   year vs last). Worth a recurring 10-min check-in each quarter against
   `src/lib/seasons.ts`, not a single sign-off.
 
-### 12. Division mapping spot-check — 🚩 real issue found, PENDING on the team (updated 6 Aug)
-- Cross-checked our auto-classified Fruits & Veggies vs Groceries split against
-  the client-reported numbers in tab 7 — team has now filled in Apr–Jul (was
-  Apr–Jun) — they still don't match (our Groceries revenue undercounts every
-  month), **and the gap is widening**: Groceries spend read ₹27k vs their
-  ₹51k in April, but ₹29k vs their ₹75k in July — pre-April not expected until
-  Friday (team is time-boxed on tomorrow's review deck first — told them that's fine).
-- **"Apro Campaign" is correctly classified** — Sandeep confirmed it's Apricot,
-  a fruit. Not the issue.
-- **Checked all 51 campaigns by name** (not just the top spenders) — every other
-  campaign classifies correctly too, except one immaterial one ("Tomato Ketchup",
-  ~₹4.5k revenue — a grocery item currently bucketed as F&V, too small to matter).
-- **Real driver:** *"Performance Max-1 Only feed"* and *"...TG"* did **₹5.7L
-  combined revenue in Apr–Jun**, currently counted 100% as Fruits & Veggies.
-  These are Google Performance Max campaigns running the *entire product feed*
-  in one campaign — structurally mixed, can't be split by campaign name at all.
-  The widening gap through July tracks with these two campaigns scaling.
-- **Question sent to the team (3 Aug):** can Google Ads pull a product-level or
-  asset-group-level breakdown for these two campaigns, so Fruits & Veggies vs
-  Groceries revenue can be split correctly? If Google doesn't expose that for
-  Performance Max, this becomes a permanent limitation rather than an open bug.
-  Still no answer — not urgent, revisit once the pre-April backfill lands Friday.
+### 12. Division mapping spot-check — 🔄 re-diagnosed, theory changed (updated 6 Aug)
+- Team's "pre-April" backfill landed early (well ahead of Friday) — tab 7 now
+  has all 9 months, Nov '25–Jul '26, and they've split it finer: **Fruits /
+  Vegetables / Groceries** as three categories instead of two.
+- Cross-checked all 9 months against our computed split. **New read: this
+  probably isn't a misclassification bug.** Both Fruits+Veggies AND Groceries
+  read lower on our side than the client's sheet, every single month — if
+  campaigns were just landing in the wrong bucket, one side would read high
+  and the other low. Both reading low points to a SCOPE difference instead:
+  their sheet likely tracks total category sales (paid + organic), ours sums
+  only paid ad-platform revenue — the same paid-vs-organic gap already shown
+  at the top of the dashboard, just broken out by division too.
+- **Concrete anomaly found:** Feb '26 reads **₹0 Groceries** on our side vs
+  their ₹10.3k spend / ₹32k sales. Checked every active Feb campaign by name
+  — all genuinely produce (Grapes, Strawberry, Ponkh, Mushrooms, etc.), none
+  grocery-flavored. Either their Feb Groceries figure is organic-only (no ad
+  spend behind it that month), or worth a quick check on their end.
+- Prior finding (still true, just no longer believed to be the PRIMARY driver):
+  *"Performance Max-1 Only feed"* + *"...TG"* run Google's full product feed
+  in one campaign, 100% counted as Fruits & Veggies — structurally mixed,
+  can't split by name. Question about product-level Google reporting still
+  open, still not urgent.
+- **No classifier code changed** — holding until the organic-vs-paid theory
+  is confirmed one way or the other.
 - **Status: pending team's answer.** No classifier changes made.
 
 ---
