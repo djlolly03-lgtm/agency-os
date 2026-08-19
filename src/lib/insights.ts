@@ -4,6 +4,16 @@
  * (inputs → formula → result). All insights are scoped to the SELECTED
  * month; operational "act now" insights (gems, fatigue, pacing) only
  * appear when viewing the current month.
+ *
+ * Every insight also carries a `severity` (critical / watch / fyi) and an
+ * optional `action` — the one-line "so what do I do" that turns an
+ * observation into a decision. Severity drives ranking: computeInsights()
+ * returns critical items first, so a future "what needs my attention right
+ * now" view can just take the front of the array instead of re-deriving
+ * priority from scratch. This is the engine change only — no new UI yet;
+ * existing consumers (InsightChips, ExecSummary) already just render
+ * whatever order the array comes back in, so this reorders what they show
+ * without requiring changes on their end.
  */
 import type { CreativeRollup, PacingMetric, CustomerMonth } from "./queries";
 import type { ProduceMonthAgg } from "./seasons";
@@ -13,12 +23,22 @@ export interface InsightMathStep { label: string; value: string }
 
 export type InsightIcon = "flame" | "trend-down" | "trend-up" | "zap" | "gem" | "target" | "check" | "sun" | "leaf" | "users";
 
+/**
+ * critical — actively losing money / needs a decision this week.
+ * watch    — an opportunity or a risk worth monitoring, not urgent.
+ * fyi      — good news or context; nothing to act on.
+ */
+export type InsightSeverity = "critical" | "watch" | "fyi";
+
 export interface Insight {
   icon: InsightIcon;
   category: string;               // small uppercase kicker, e.g. "CREATIVE WINNER"
   metric: string;                 // the big stat headline, e.g. "+82%"
   text: string;
   tone: "win" | "warn" | "risk" | "info" | "ai";
+  severity: InsightSeverity;
+  /** one-line recommended next step — omitted when there's genuinely nothing to do */
+  action?: string;
   math: {
     steps: InsightMathStep[];
     formula: string;
@@ -26,6 +46,13 @@ export interface Insight {
   };
   link?: { href: string; label: string };
 }
+
+const SEVERITY_RANK: Record<InsightSeverity, number> = { critical: 0, watch: 1, fyi: 2 };
+export const SEVERITY_LABEL: Record<InsightSeverity, string> = {
+  critical: "Needs action",
+  watch: "Worth watching",
+  fyi: "For your info",
+};
 
 const inr = (v: number) => `₹${new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Math.round(v))}`;
 const compact = (v: number) => {
@@ -79,6 +106,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
       metric: `+${overBy}%`,
       text: `“${truncate(s.a.ad_name)}” beat the account average — ${s.roas.toFixed(2)}× ROAS on ${compact(s.a.spend)}.`,
       tone: "win",
+      severity: "watch",
+      action: "Feed it more budget — it's already outperforming the account average.",
       math: {
         steps: [
           { label: `Creative spend (${monthLabel})`, value: compact(s.a.spend) },
@@ -117,6 +146,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
             ? `Cost per order rose to ${inr(recent)} in the last 5 days of the period (was ${inr(prior)}).`
             : `Cost per order dropped to ${inr(recent)} in the last 5 days of the period (was ${inr(prior)}).`,
           tone: up ? "warn" : "win",
+          severity: up ? "watch" : "fyi",
+          action: up ? "Check targeting and frequency on the recent campaigns — cost per order is climbing." : undefined,
           math: {
             steps: [
               { label: `Spend, last 5 days (${range(recent5)})`, value: compact(r.spend) },
@@ -149,6 +180,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         metric: `+${pctGap}%`,
         text: `${googleBetter ? "Google" : "Meta"} outperformed ${googleBetter ? "Meta" : "Google"} on ROAS (${(googleBetter ? google : meta).roas.toFixed(2)}× vs ${(googleBetter ? meta : google).roas.toFixed(2)}×).`,
         tone: "info",
+        severity: "watch",
+        action: `Consider shifting incremental budget toward ${googleBetter ? "Google" : "Meta"} while the gap holds.`,
         math: {
           steps: [
             { label: `Meta spend (${monthLabel})`, value: compact(meta.spend) },
@@ -173,12 +206,19 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
   if (cm.length) {
     const latest = cm[cm.length - 1];
     const prevM = cm.length > 1 ? cm[cm.length - 2] : null;
+    const ltvCacSeverity: InsightSeverity = latest.ltvCac! >= 3 ? "fyi" : latest.ltvCac! >= 2 ? "watch" : "critical";
     out.push({
       icon: "users",
       category: `Customer economics · ${latest.month.slice(0, 7)}`,
       metric: `${latest.ltvCac!.toFixed(1)}×`,
       text: `LTV:CAC — every ₹1 of acquisition buys ${inr(latest.ltvCac!)} of expected lifetime revenue${prevM ? ` (${prevM.ltvCac!.toFixed(1)}× the month before)` : ""}.`,
       tone: latest.ltvCac! >= 3 ? "win" : latest.ltvCac! >= 2 ? "info" : "risk",
+      severity: ltvCacSeverity,
+      action: ltvCacSeverity === "critical"
+        ? "CAC is outpacing lifetime value — slow acquisition spend or fix retention before scaling further."
+        : ltvCacSeverity === "watch"
+          ? "Workable but not yet strongly profitable — watch next month before increasing spend."
+          : undefined,
       math: {
         steps: [
           { label: "New customers (client-reported)", value: String(latest.newCustomers) },
@@ -202,6 +242,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         metric: `${up2 ? "+" : "−"}${Math.abs((latest.repeatRate! - prevM.repeatRate!) * 100).toFixed(0)}pt`,
         text: `Repeat rate ${up2 ? "climbed" : "fell"} to ${Math.round(latest.repeatRate! * 100)}% — ${up2 ? "customers are coming back; every point here compounds LTV" : "returning customers thinned; retention needs attention"}.`,
         tone: up2 ? "win" : "warn",
+        severity: up2 ? "fyi" : "watch",
+        action: up2 ? undefined : "Retention is thinning — consider a win-back offer or loyalty nudge for lapsing customers.",
         math: {
           steps: [
             { label: `${prevM.month.slice(0, 7)} repeat rate`, value: `${Math.round(prevM.repeatRate! * 100)}%` },
@@ -226,6 +268,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         metric: c.produce.label,
         text: `window shuts after ${monthLabel} — ${compact(c.revenue)} so far${roas > 0 ? ` at ${roas.toFixed(2)}×` : ""}. Last call to push${closing.length > 1 ? ` (+${closing.length - 1} more closing)` : ""}.`,
         tone: "warn",
+        severity: "watch",
+        action: `Push remaining budget on ${c.produce.label} now — the window shuts after ${monthLabel}.`,
         math: {
           steps: [
             { label: `${c.produce.label} season (India)`, value: seasonLabel(c.produce) },
@@ -246,6 +290,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         metric: String(missed.length),
         text: `in-season item${missed.length > 1 ? "s" : ""} with zero spend — nature is shipping, we aren't selling. Full list in Seasons, below.`,
         tone: "ai",
+        severity: "watch",
+        action: "Launch campaigns on these in-season items before the window passes.",
         math: {
           steps: missed.slice(0, 5).map((m) => ({ label: m.produce.label, value: `${seasonLabel(m.produce)} · ₹0 spend this month` })),
           formula: `missed = in season this month AND spend = 0 AND sold historically`,
@@ -262,6 +308,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         metric: compact(offSpend),
         text: `spent on out-of-season produce — ${offSeason.slice(0, 3).map((m) => m.produce.label).join(", ")}. Expect thinner supply and softer demand.`,
         tone: "warn",
+        severity: "watch",
+        action: "Reconsider spend on out-of-season produce — expect thinner returns until season resumes.",
         math: {
           steps: offSeason.slice(0, 5).map((m) => ({ label: m.produce.label, value: `${compact(m.spend)} spend · season ${seasonLabel(m.produce)}` })),
           formula: `off-season spend = Σ spend on items whose season excludes ${monthLabel}`,
@@ -276,6 +324,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
   } else if (input.goal && input.goal.target > 0) {
     // ---- past month: goal attainment ----
     const att = input.monthRevenue / input.goal.target;
+    const attSeverity: InsightSeverity = att >= 1 ? "fyi" : att >= 0.85 ? "watch" : "critical";
     out.push({
       icon: att >= 1 ? "check" : "target",
       category: `Goal attainment · ${monthLabel}`,
@@ -284,6 +333,12 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         ? `of the revenue goal was hit — ${compact(input.monthRevenue)} against ${compact(input.goal.target)}.`
         : `of the revenue goal was reached — ${compact(input.monthRevenue)} against ${compact(input.goal.target)}.`,
       tone: att >= 1 ? "win" : att >= 0.85 ? "warn" : "risk",
+      severity: attSeverity,
+      action: attSeverity === "critical"
+        ? "Revenue is meaningfully behind goal — review pacing, spend levels and conversion before next month."
+        : attSeverity === "watch"
+          ? "Close, but short — worth digging into what held the last stretch back."
+          : undefined,
       math: {
         steps: [
           { label: `Goal${input.goal.isDefault ? " (default: prior month +25%)" : ""}`, value: compact(input.goal.target) },
@@ -296,7 +351,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     });
   }
 
-  return out.slice(0, 8);
+  return out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]).slice(0, 8);
 }
 
 /** Operational "act now" insights — only meaningful for the current month. */
@@ -319,6 +374,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
       metric: `${Math.round((100 * fatigueSpend) / winSpend)}%`,
       text: `of current spend sits on ${fatiguing.length} fatiguing creative${fatiguing.length > 1 ? "s" : ""} — refresh or rotate.`,
       tone: "risk",
+      severity: "critical",
+      action: "Refresh or pause the fatiguing creatives before more budget is wasted on declining ROAS.",
       math: {
         steps: [
           { label: "Fatiguing = 14d ROAS fell ≥40% vs prior 28d", value: `${fatiguing.length} creatives` },
@@ -346,6 +403,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
       metric: String(gems.length),
       text: `hidden gem${gems.length > 1 ? "s" : ""} running high ROAS on tiny budgets — feed the winners.`,
       tone: "ai",
+      severity: "watch",
+      action: "Increase budget carefully on these — the algorithm found a profitable pocket at low spend.",
       math: {
         steps: [
           { label: "Hidden gem = 14d ROAS ≥ 1.5× account, on <5% of spend", value: `${gems.length} qualify` },
@@ -374,6 +433,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
         ? `of goal is where this month lands at the current run rate — pacing ${Math.round((1 - rev.paceRatio) * 100)}% behind.`
         : `of goal projected — pacing ${Math.round((rev.paceRatio - 1) * 100)}% ahead.`,
       tone: behind ? "risk" : "win",
+      severity: behind ? "critical" : "fyi",
+      action: behind ? "Increase spend or fix conversion issues now to catch up before month-end." : undefined,
       math: {
         steps: [
           { label: `Monthly goal${rev.goalIsDefault ? " (default: last month +25%)" : ""}`, value: compact(rev.goal) },

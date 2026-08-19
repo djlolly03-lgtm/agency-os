@@ -5,6 +5,9 @@ import { withClient } from "../route-helpers";
 const ALLOWED = new Set([
   "offline_revenue", "ltv_fruits_veggies", "ltv_groceries",
   "total_revenue", "total_orders", "new_customers", "returning_customers",
+  // retention channels (usually synced from the "8. Retention" tab, but
+  // manual entry through this endpoint works too)
+  "wa_spend", "wa_revenue", "wa_orders", "email_sent", "email_open_rate",
 ]);
 
 /** GET ?month=YYYY-MM-01 → that month's manual inputs; POST { month, metric, value } to set. */

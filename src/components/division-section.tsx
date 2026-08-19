@@ -153,7 +153,8 @@ export function HeroLoserCards({ hero, loser, slug, periodLabel }: {
           style={{ background: `color-mix(in srgb, ${color} 18%, transparent)`, color }}>
           <Icon size={15} strokeWidth={2.4} />
         </span>
-        <h3 className="text-sm font-bold">{kind === "hero" ? "Hero campaign" : "Loser campaign"}
+        {/* "Loser" was the internal shorthand; this card faces the client */}
+        <h3 className="text-sm font-bold">{kind === "hero" ? "Hero campaign" : "Needs a look"}
           <span className="ml-1.5 font-medium" style={{ color: "var(--text-muted)" }}>{periodLabel}</span>
         </h3>
       </div>

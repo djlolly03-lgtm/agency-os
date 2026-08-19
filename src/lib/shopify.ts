@@ -75,6 +75,8 @@ export interface ShopifyMonthStats {
   repeatAov: number | null;
   newOrders: number;
   repeatOrders: number;
+  newRevenue: number;        // order revenue from first-purchase orders that month
+  repeatRevenue: number;     // order revenue from customers who'd bought before
 }
 
 export interface ShopifyCustomerStats {
@@ -123,6 +125,7 @@ export async function getShopifyCustomerStats(clientId: string): Promise<Shopify
       newAov: s.newOrders > 0 ? s.newRev / s.newOrders : null,
       repeatAov: s.repeatOrders > 0 ? s.repeatRev / s.repeatOrders : null,
       newOrders: s.newOrders, repeatOrders: s.repeatOrders,
+      newRevenue: s.newRev, repeatRevenue: s.repeatRev,
     })),
     ltvMeasured, customers: custTotal.size, orders: rows.length,
   };
@@ -200,4 +203,107 @@ export async function getCohortRetention(clientId: string): Promise<{ cohorts: C
   });
 
   return { cohorts, maxOffset };
+}
+
+// ---------- RFM segments & win-back ----------
+
+/**
+ * Rule-based RFM — deliberately NOT quintile scoring, so every bucket is
+ * explainable in one sentence. Frequency: repeat (2+ orders) vs one-time.
+ * Recency: active ≤45d, cooling 46–90d, lapsed >90d — produce cadence is
+ * roughly monthly, so 45d ≈ one missed cycle, 90d ≈ three.
+ * "Today" is data-relative (latest order day), same convention as queries.ts.
+ */
+export const RFM_RULES = { activeDays: 45, lapsedDays: 90 };
+
+export type RfmSegmentKey =
+  | "champions" | "slipping" | "lost_regulars"
+  | "fresh" | "cooling_one" | "one_and_done";
+
+export interface RfmSegment {
+  key: RfmSegmentKey;
+  label: string;
+  desc: string;                 // the action, not just the definition
+  customers: number;
+  lifetimeRevenue: number;
+}
+
+export interface WinbackCustomer {
+  name: string;
+  email: string;
+  orders: number;
+  lifetimeSpend: number;
+  lastOrder: string;            // YYYY-MM-DD
+}
+
+export interface RfmResult {
+  asOf: string;                 // latest order day (reference for recency)
+  totalCustomers: number;       // identifiable (email on file) only
+  anonOrders: number;           // orders excluded — no email, can't be contacted
+  segments: RfmSegment[];       // fixed order, all six always present
+  winback: WinbackCustomer[];   // lost regulars, highest lifetime spend first
+  winbackTotal: number;         // all lost regulars (winback is capped for display)
+  winbackRevenue: number;       // lifetime revenue sitting with lost regulars
+}
+
+const SEGMENT_META: Record<RfmSegmentKey, { label: string; desc: string }> = {
+  champions: { label: "Champions", desc: "repeat buyers, ordered recently — protect them" },
+  slipping: { label: "Slipping away", desc: "repeat buyers going quiet — nudge them this week" },
+  lost_regulars: { label: "Lost regulars", desc: "repeat buyers gone 90+ days — send a win-back offer" },
+  fresh: { label: "New faces", desc: "one recent order — push the second purchase now" },
+  cooling_one: { label: "One order, cooling", desc: "first order didn't stick yet — remind them" },
+  one_and_done: { label: "One-and-done", desc: "tried once, long gone — lowest priority" },
+};
+
+export async function getRfmSegments(clientId: string): Promise<RfmResult | null> {
+  const db = await getDb();
+  const rows = await db.query<{ customer_key: string; customer_name: string; day: string; total: number }>(
+    `select customer_key, customer_name, day::text as day, total
+     from shopify_orders where client_id = $1`, [clientId]);
+  if (!rows.length) return null;
+
+  let asOf = "0000-00-00";
+  let anonOrders = 0;
+  const cust = new Map<string, { name: string; orders: number; total: number; last: string }>();
+  for (const r of rows) {
+    if (r.day > asOf) asOf = r.day;
+    if (r.customer_key.startsWith("anon:")) { anonOrders++; continue; }
+    const c = cust.get(r.customer_key) ?? { name: r.customer_name, orders: 0, total: 0, last: "0000-00-00" };
+    c.orders += 1;
+    c.total += N(r.total);
+    if (r.day > c.last) { c.last = r.day; if (r.customer_name) c.name = r.customer_name; }
+    cust.set(r.customer_key, c);
+  }
+
+  const refMs = Date.parse(asOf + "T00:00:00Z");
+  const seg = new Map<RfmSegmentKey, { customers: number; lifetimeRevenue: number }>();
+  const keys: RfmSegmentKey[] = ["champions", "slipping", "lost_regulars", "fresh", "cooling_one", "one_and_done"];
+  for (const k of keys) seg.set(k, { customers: 0, lifetimeRevenue: 0 });
+
+  const lost: WinbackCustomer[] = [];
+  for (const [email, c] of cust) {
+    const daysSince = Math.floor((refMs - Date.parse(c.last + "T00:00:00Z")) / 86400000);
+    const repeat = c.orders >= 2;
+    const band = daysSince <= RFM_RULES.activeDays ? 0 : daysSince <= RFM_RULES.lapsedDays ? 1 : 2;
+    const key: RfmSegmentKey = repeat
+      ? band === 0 ? "champions" : band === 1 ? "slipping" : "lost_regulars"
+      : band === 0 ? "fresh" : band === 1 ? "cooling_one" : "one_and_done";
+    const s = seg.get(key)!;
+    s.customers += 1;
+    s.lifetimeRevenue += c.total;
+    if (key === "lost_regulars") {
+      lost.push({ name: c.name, email, orders: c.orders, lifetimeSpend: c.total, lastOrder: c.last });
+    }
+  }
+  lost.sort((a, b) => b.lifetimeSpend - a.lifetimeSpend);
+
+  return {
+    asOf,
+    totalCustomers: cust.size,
+    anonOrders,
+    segments: keys.map((k) => ({ key: k, ...SEGMENT_META[k], ...seg.get(k)! })),
+    winback: lost.slice(0, 30),
+    winbackTotal: lost.length,
+    winbackRevenue: lost.reduce((s, c) => s + c.lifetimeSpend, 0),
+  };
 }

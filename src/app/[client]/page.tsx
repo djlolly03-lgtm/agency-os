@@ -5,9 +5,12 @@ import {
   getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
   getCustomerEconomics, getMeasuredLtv,
 } from "@/lib/queries";
-import { getCohortRetention } from "@/lib/shopify";
+import { getCohortRetention, getRfmSegments } from "@/lib/shopify";
+import { getRetentionChannels } from "@/lib/retention";
+import { RetentionChannels } from "@/components/retention-channels";
 import { CohortRetention } from "@/components/cohort-retention";
-import { ExecSummary } from "@/components/exec-summary";
+import { ExecSummary, EXEC_SUMMARY_COUNT } from "@/components/exec-summary";
+import { Collapsible } from "@/components/collapsible";
 import { CustomerEconomics } from "@/components/customer-economics";
 import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar, buildSeasonCalendar } from "@/lib/seasons";
 import { SeasonRadar } from "@/components/season-radar";
@@ -82,7 +85,11 @@ export default async function OverviewPage({ params, searchParams }: {
     getCustomerEconomics(client.id),
     getMeasuredLtv(client.id),
   ]);
-  const cohortData = await getCohortRetention(client.id);
+  const [cohortData, rfm, retentionMonths] = await Promise.all([
+    getCohortRetention(client.id),
+    getRfmSegments(client.id),
+    getRetentionChannels(client.id),
+  ]);
 
   const rangeStart = periodSel ? periodSel.from : selectedMonth;
   const rangeEndRaw = periodSel ? periodSel.to : monthEnd;
@@ -413,6 +420,12 @@ export default async function OverviewPage({ params, searchParams }: {
   let actNo = 0;
   const num2 = () => String(++actNo).padStart(2, "0");
 
+  // Scope labels: roughly half these acts answer to the period picker and half
+  // are all-history by nature. Saying so on each header is the difference
+  // between "this is Feb" and "some of this is Feb" — previously unstated.
+  const custScopeMonth = custMonths.filter((m) => m.hasData && m.ltvCac != null).slice(-1)[0];
+  const custScope = custScopeMonth ? monthLabel(custScopeMonth.month.slice(0, 7)) : "Latest data";
+
   return (
     <div className="flex flex-col gap-4">
       {/* ===== 3-line summary — the verdict, before the numbers ===== */}
@@ -427,11 +440,11 @@ export default async function OverviewPage({ params, searchParams }: {
           pulling the hero up would drag it over the summary's lower lines
           instead — exactly what was happening. */}
       <div>
-        <HeroCinema skyline={sparkRevenue}>
-          <div className="flex min-h-[100dvh] flex-col pb-10 pt-24 sm:pt-28">
+        <HeroCinema skyline={sparkRevenue} minHeight="72vh">
+          <div className="flex min-h-[72vh] flex-col pb-10 pt-24 sm:pt-28">
             {/* headline */}
             <div className="mt-2 text-center sm:mt-6">
-              <h1 className="cinema-h1 text-5xl sm:text-7xl md:text-8xl">
+              <h1 className="cinema-h1 text-4xl sm:text-6xl md:text-7xl">
                 <span className="line-serif hero-anim hero-reveal" style={{ animationDelay: "0.25s" }}>
                   Fresh produce,
                 </span>
@@ -520,15 +533,12 @@ export default async function OverviewPage({ params, searchParams }: {
       {periodSel && (
         <>
           <FadeIn>
-            <SectionHeader index={num2()} eyebrow="Growth" title="Up and to the right"
-              meta={`monthly revenue · ${periodSel.label} highlighted`} />
+            <SectionHeader index={num2()} eyebrow="Growth &amp; efficiency" title={marginTitle}
+              meta={`monthly revenue, then revenue vs spend · ${periodSel.label} highlighted`}
+              scope="All time" />
           </FadeIn>
           <FadeIn>
             <GrowthStory series={series} accentMonths={periodSel.months} />
-          </FadeIn>
-          <FadeIn>
-            <SectionHeader index={num2()} eyebrow="Efficiency" title={marginTitle}
-              meta="revenue vs spend · the gap is margin" />
           </FadeIn>
           <FadeIn>
             <MarginEngine series={series} />
@@ -539,11 +549,11 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== Customer engine ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader index={num2()} eyebrow="Customer engine" title="What a customer costs — and what one is worth"
-          meta="from client-reported monthly customer counts" />
+          meta="from client-reported monthly customer counts" scope={custScope} />
       </FadeIn>
       <FadeIn delay={0.05}>
         <SpotlightStage>
-          <CustomerEconomics months={custMonths} slug={slug} measuredLtv={measuredLtv} />
+          <CustomerEconomics months={custMonths} slug={slug} measuredLtv={measuredLtv} rfm={rfm} />
         </SpotlightStage>
       </FadeIn>
 
@@ -552,7 +562,7 @@ export default async function OverviewPage({ params, searchParams }: {
         <>
           <FadeIn delay={0.05}>
             <SectionHeader index={num2()} eyebrow="Cohorts" title="Who comes back, and when."
-              meta="signup month × months since — from the Shopify order history" />
+              meta="signup month × months since — from the Shopify order history" scope="All time" />
           </FadeIn>
           <FadeIn delay={0.05}>
             <CohortRetention cohorts={cohortData.cohorts} maxOffset={cohortData.maxOffset} />
@@ -563,16 +573,18 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== INSIGHTS (scoped to selection) ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader index={num2()} eyebrow="Signals" title="What the data is telling us"
-          meta="click any card for the math" />
+          meta="the summary's three, plus everything below them" scope={periodLabel} />
       </FadeIn>
       <FadeIn delay={0.05}>
-        <InsightChips insights={insights} />
+        {/* skip the ones already promoted above the hero — they used to render
+            twice on the same page, verbatim */}
+        <InsightChips insights={insights} skip={EXEC_SUMMARY_COUNT} />
       </FadeIn>
 
       {/* ===== Money flow ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader index={num2()} eyebrow="Money flow" title="Where revenue comes from"
-          meta="online vs offline · divisions · best & worst" />
+          meta="online vs offline · divisions · best & worst" scope={periodLabel} />
       </FadeIn>
       <FadeIn delay={0.05}>
         <OnlineOfflineCard month={dv.month} online={dv.onlineRevenueMtd}
@@ -591,7 +603,8 @@ export default async function OverviewPage({ params, searchParams }: {
           <FadeIn delay={0.05}>
             <SectionHeader index={num2()} eyebrow="The bridge"
               title={`${bridgePrev.label} → ${bridgeCur.label}: where the change came from.`}
-              meta="Meta · Google · organic — measured, not modelled" />
+              meta="Meta · Google · organic — measured, not modelled"
+              scope={`${bridgePrev.label} → ${bridgeCur.label}`} />
           </FadeIn>
           <FadeIn delay={0.05}>
             <RevenueBridge prev={bridgePrev} cur={bridgeCur} />
@@ -604,7 +617,7 @@ export default async function OverviewPage({ params, searchParams }: {
         <>
           <FadeIn delay={0.05}>
             <SectionHeader index={num2()} eyebrow="Channels" title={duelTitle}
-              meta={`${periodLabel} · winner ticks per metric`} />
+              meta="winner ticks per metric" scope={periodLabel} />
           </FadeIn>
           <FadeIn delay={0.05}>
             <ChannelDuel platforms={platformTotals} periodLabel={periodLabel} />
@@ -612,19 +625,23 @@ export default async function OverviewPage({ params, searchParams }: {
         </>
       )}
 
+      {/* the third channel the duel never shows — money made from customers
+          we already paid for. Awaiting-data state until the tab lands. */}
+      <FadeIn delay={0.05}>
+        <RetentionChannels rows={retentionMonths} paidRoas={mtRoas > 0 ? mtRoas : null}
+          selectedMonth={selectedMonth} />
+      </FadeIn>
+
       {/* ===== Growth story (month mode: after money flow) ===== */}
       {!periodSel && (
         <>
           <FadeIn delay={0.05}>
-            <SectionHeader index={num2()} eyebrow="Growth" title="Up and to the right"
-              meta={`all ${monthsAsc.length} months · ${selectedKey === months[0].slice(0, 7) ? "this month" : monthLabel(selectedKey)} highlighted`} />
+            <SectionHeader index={num2()} eyebrow="Growth &amp; efficiency" title={marginTitle}
+              meta={`all ${monthsAsc.length} months · ${selectedKey === months[0].slice(0, 7) ? "this month" : monthLabel(selectedKey)} highlighted`}
+              scope="All time" />
           </FadeIn>
           <FadeIn delay={0.05}>
             <GrowthStory series={series} accentMonths={[selectedMonth]} />
-          </FadeIn>
-          <FadeIn delay={0.05}>
-            <SectionHeader index={num2()} eyebrow="Efficiency" title={marginTitle}
-              meta="revenue vs spend · the gap is margin" />
           </FadeIn>
           <FadeIn delay={0.05}>
             <MarginEngine series={series} />
@@ -636,37 +653,44 @@ export default async function OverviewPage({ params, searchParams }: {
       <div id="seasons" style={{ scrollMarginTop: "100px" }} />
       <FadeIn delay={0.05}>
         <SectionHeader index={num2()} eyebrow="Seasons" title="Selling what nature ships"
-          meta="produce windows vs actual sales · India seasons" />
+          meta="produce windows vs actual sales · India seasons" scope={periodLabel} />
       </FadeIn>
       {isMonthMode && (
         <FadeIn delay={0.05}>
           <SeasonRadar riding={radar.riding} missed={radar.missed} offSeason={radar.offSeason} />
         </FadeIn>
       )}
+      {/* the full produce × month grid is reference material — the radar above
+          already answers "what should we be selling right now" */}
       <FadeIn delay={0.05}>
-        <SeasonCalendar rows={seasonCal} months={monthsAsc} />
+        <Collapsible title="Season calendar — every window, every month"
+          teaser={`${seasonCal.length} items across ${monthsAsc.length} months`}>
+          <SeasonCalendar rows={seasonCal} months={monthsAsc} />
+        </Collapsible>
       </FadeIn>
 
-      {/* ===== Conversion funnel ===== */}
+      {/* ===== Conversion funnel — the single biggest block on the page, and
+          Meta-only mid-funnel plumbing. Worth having, not worth a full screen
+          of the default scroll: the headline conversion rate rides on the
+          summary line, the stage-by-stage detail is one click away. ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader index={num2()} eyebrow="The funnel" title="From impression to purchase"
-          meta={periodLabel} />
+          meta="Meta attribution — Google's export has no stage data" scope={periodLabel} />
       </FadeIn>
       <FadeIn delay={0.05}>
-        <SpotlightStage>
-        <div className="canvas-dark p-6">
+        <Collapsible
+          title="Impression → purchase, stage by stage"
+          teaser={`${inrCompact(funnel.spend)} in → ${inrCompact(funnel.revenue)} out · ${(funnel.spend > 0 ? funnel.revenue / funnel.spend : 0).toFixed(2)}× on this funnel`}>
           <Funnel stages={funnel.stages}
-            subtitle="Meta attribution (Google's export has no stage data)"
-            footer={`Meta flow: ${inrCompact(funnel.spend)} in → ${inrCompact(funnel.revenue)} out · ${(funnel.spend > 0 ? funnel.revenue / funnel.spend : 0).toFixed(2)}× ROAS on this funnel`} />
-        </div>
-        </SpotlightStage>
+            subtitle="Meta attribution (Google's export has no stage data)" />
+        </Collapsible>
       </FadeIn>
 
       {/* ===== Current-month operations: pacing + live KPIs ===== */}
       {isCurrent && (
         <FadeIn delay={0.05}>
           <SectionHeader index={num2()} eyebrow="Operations" title="Pace, pulse, and the daily grind"
-            meta="live · current month only" />
+            meta="live · current month only" scope="Month to date" />
         </FadeIn>
       )}
       {isCurrent && (
@@ -694,19 +718,22 @@ export default async function OverviewPage({ params, searchParams }: {
         </FadeIn>
       )}
 
-      {/* ===== Trend (all history) ===== */}
+      {/* ===== Exploration tools, not narrative — they answer questions you
+          arrive with, so they wait until you go looking. ===== */}
       <FadeIn delay={0.05}>
-        <TrendChart daily={daily} weekly={weekly} monthly={monthly} />
-      </FadeIn>
-
-      {/* ===== Daily ROAS heatmap (trailing 13 weeks) ===== */}
-      <FadeIn delay={0.05}>
-        <DayHeatmap days={heatDays} slug={slug} />
+        <Collapsible title="Explore the raw trend"
+          teaser="any metric, any grain · daily ROAS heatmap">
+          <div className="flex flex-col gap-4">
+            <TrendChart daily={daily} weekly={weekly} monthly={monthly} />
+            <DayHeatmap days={heatDays} slug={slug} />
+          </div>
+        </Collapsible>
       </FadeIn>
 
       {/* ===== Top creatives (current operational state) ===== */}
       <FadeIn delay={0.05}>
-        <SectionHeader index={num2()} eyebrow="Creative engine" title="What deserves more budget" meta="live status" />
+        <SectionHeader index={num2()} eyebrow="Creative engine" title="What deserves more budget"
+          meta="live status" scope="Last 14 days" />
       </FadeIn>
       <FadeIn delay={0.05}>
         <div className="card p-5">

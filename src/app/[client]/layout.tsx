@@ -10,6 +10,7 @@ const NAV = [
   { href: "/campaigns", label: "Campaigns" },
   { href: "/platforms", label: "Platforms" },
   { href: "/monthly", label: "Monthly report" },
+  { href: "/review", label: "Review" },
   { href: "/internal", label: "Internal" },
 ];
 
@@ -34,7 +35,7 @@ export default async function ClientLayout({
   return (
     <div className="flex min-h-screen flex-col">
       {/* floating glass nav — no bar, three glass islands over the page */}
-      <header className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
+      <header className="no-print pointer-events-none fixed inset-x-0 top-0 z-[100] flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
         <div className="pointer-events-auto glass-chip">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/organik-truck-logo.png" alt={client.name} className="h-8 w-auto rounded-full"
@@ -56,7 +57,7 @@ export default async function ClientLayout({
         {children}
       </div>
 
-      <footer className="border-t" style={{ borderColor: "var(--border-hairline)" }}>
+      <footer className="no-print border-t" style={{ borderColor: "var(--border-hairline)" }}>
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4">
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
             Prepared for {client.name} · data refreshed daily from ad platforms

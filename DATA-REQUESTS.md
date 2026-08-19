@@ -72,6 +72,52 @@ and how much effort it takes. Priority order.
 
 ---
 
+## P1.5 — New asks from the July review deck (numbers exist, sheet tabs don't)
+
+### 13. Retention channels — WhatsApp & Email monthly tab
+- **Why:** July's deck showed WhatsApp remarketing at **₹20.5k spend → ₹3.89L revenue
+  (18.97× ROAS, 342 orders)** — the best return in the account — plus 28,372 emails at a
+  25.63% open rate. None of it reaches the dashboard, so the account's strongest channel
+  is invisible next to Meta and Google.
+- **How:** add a tab named **`8. Retention`** to the customer-data sheet, one row per month:
+
+  | Month | WhatsApp spend | WhatsApp revenue | WhatsApp orders | Emails sent | Email open rate |
+  |---|---|---|---|---|---|
+  | Jul'26 | 20500 | 388940 | 342 | 28372 | 25.63% |
+
+  Month accepts `Jul'26`, `Jul 2026` or `2026-07`. The daily sync picks the tab up
+  automatically — no code change needed once it exists.
+- **Unlocks:** the Retention Channels card (already live on the Overview in
+  awaiting-data state), WhatsApp-vs-paid ROAS comparison, retention trend over time.
+
+### 14. Per-product monthly ads table
+- **Why:** the deck's "Regular Product Wise Ads Data" slide (product × spend/revenue/
+  purchases/ROAS/creatives + a status column: Active / Scaling / **Out of stock** /
+  Founder video required) is the single most actionable table Pixel Mint produces —
+  and it's rebuilt by hand every month for the deck only. On the dashboard it would
+  also power automatic flags: *ad spend running against a product marked out of stock*
+  was July's biggest stated challenge (Mangosteen, Plum, Litchi, Cherry, ₹51.6k returns).
+- **How:** a monthly tab (e.g. `9. Product Ads`) mirroring the deck table, columns:
+  Month | Product | Amount spent | Revenue | Purchases | Creatives created | Status.
+- **Unlocks:** per-SKU layer on the dashboard, stock-out-vs-spend alerts, product
+  status woven into the Seasons act. *(Ingestion not built yet — will build when the
+  team confirms the tab format.)*
+
+### 15. Shopify abandoned-checkout export — blocks the COD call experiment
+- **Why:** the plan is to call add-to-cart drop-offs to size touch-and-feel/COD demand.
+  Meta's add-to-cart data can *size* that drop-off (~5,100 events/month, and the
+  ATC→purchase rate has fallen from 16.6% in Dec '25 to 7.9% in Aug '26) but it is
+  **event-level and anonymous** — one person can add to cart repeatedly, and there is no
+  name, phone or email attached. It cannot produce a call list.
+- **How:** Shopify → Analytics → Abandoned checkouts, exported like the existing
+  "5.Shopify Extract" tab: checkout ID, date, customer name, phone, email, cart value,
+  items. Ingestion mirrors the existing Shopify order pipeline.
+- **Unlocks:** the actual call list, plus abandoned-cart value as a real (rather than
+  modelled) number, plus whether drop-off concentrates in particular SKUs or delivery
+  pincodes — which would separate a payment-method problem from a delivery-promise one.
+
+---
+
 ## P4 — Validation
 
 ### 11. Season windows sign-off

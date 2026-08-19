@@ -15,7 +15,10 @@ export function ShareSummary({ insights, periodLabel, clientName }: {
   const [state, setState] = useState<"idle" | "copied">("idle");
 
   const buildText = () => {
-    const lines = insights.slice(0, 3).map((i) => `• ${i.metric} — ${i.text}`);
+    const lines = insights.slice(0, 3).flatMap((i) => [
+      `• ${i.metric} — ${i.text}`,
+      ...(i.action ? [`   → ${i.action}`] : []),
+    ]);
     return [`${clientName} · ${periodLabel}`, ...lines].join("\n");
   };
 

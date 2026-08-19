@@ -651,6 +651,8 @@ export interface CustomerMonth {
   // real order-level stats (Shopify export) — null until ingested
   newAov: number | null;
   repeatAov: number | null;
+  newRevenue: number | null;        // store revenue from first-purchase orders
+  repeatRevenue: number | null;     // store revenue from returning customers
 }
 
 /**
@@ -691,7 +693,8 @@ export async function getCustomerEconomics(clientId: string): Promise<CustomerMo
       return { month, hasData, newCustomers: newC, returningCustomers: retC,
         totalOrders, totalRevenue, paidSpend,
         repeatRate: null, aov: null, cacNew: null, ltv: null, ltvCac: null,
-        newAov: realAov?.newAov ?? null, repeatAov: realAov?.repeatAov ?? null };
+        newAov: realAov?.newAov ?? null, repeatAov: realAov?.repeatAov ?? null,
+        newRevenue: realAov?.newRevenue ?? null, repeatRevenue: realAov?.repeatRevenue ?? null };
     }
     const customers = newC! + retC!;
     const repeatRate = customers > 0 ? retC! / customers : 0;
@@ -701,7 +704,8 @@ export async function getCustomerEconomics(clientId: string): Promise<CustomerMo
     const ltvCac = ltv != null && cacNew != null && cacNew > 0 ? ltv / cacNew : null;
     return { month, hasData, newCustomers: newC, returningCustomers: retC,
       totalOrders, totalRevenue, paidSpend, repeatRate, aov, cacNew, ltv, ltvCac,
-      newAov: realAov?.newAov ?? null, repeatAov: realAov?.repeatAov ?? null };
+      newAov: realAov?.newAov ?? null, repeatAov: realAov?.repeatAov ?? null,
+      newRevenue: realAov?.newRevenue ?? null, repeatRevenue: realAov?.repeatRevenue ?? null };
   });
 }
 
@@ -788,6 +792,37 @@ export async function getGoals(clientId: string, month: string) {
   const db = await getDb();
   return db.query<{ metric: string; target: number }>(
     `select metric, target from goals where client_id = $1 and month = $2`, [clientId, month]);
+}
+
+// ---------- monthly review notes (the narrative the data can't produce) ----------
+
+/** Sections of the monthly review a human writes, in the order they're presented. */
+export const REVIEW_SECTIONS = [
+  { key: "challenges", label: "Challenges this month",
+    hint: "What held the numbers back — stock-outs, learning-phase resets, competition, returns." },
+  { key: "next_month", label: "Next month's plan",
+    hint: "Where budget goes, what we're testing, which categories get the push." },
+  { key: "support_needed", label: "What we need from you",
+    hint: "Stock availability, content, approvals, budget — the asks that unblock the plan." },
+] as const;
+
+export type ReviewSectionKey = (typeof REVIEW_SECTIONS)[number]["key"];
+
+export async function getReviewNotes(clientId: string, month: string): Promise<Record<string, string>> {
+  const db = await getDb();
+  const rows = await db.query<{ section: string; body: string }>(
+    `select section, body from review_notes where client_id = $1 and month = $2`,
+    [clientId, month]);
+  return Object.fromEntries(rows.map((r) => [String(r.section), String(r.body)]));
+}
+
+export async function setReviewNote(clientId: string, month: string, section: string, body: string) {
+  const db = await getDb();
+  await db.query(
+    `insert into review_notes (client_id, month, section, body) values ($1,$2,$3,$4)
+     on conflict (client_id, month, section) do update
+       set body = excluded.body, updated_at = now()`,
+    [clientId, month, section, body]);
 }
 
 // ---------- platforms & monthly report ----------

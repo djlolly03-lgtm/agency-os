@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getClientBySlug, getCreatives, getGoals, getMonths, latestDay } from "@/lib/queries";
-import { inrCompact, monthLabel } from "@/lib/format";
+import { getRfmSegments } from "@/lib/shopify";
+import { inr, inrCompact, monthLabel, num } from "@/lib/format";
 import { MatchActions } from "./match-actions";
 import { GoalEditor } from "./goal-editor";
 import { ManualInputsEditor } from "./manual-inputs-editor";
@@ -28,13 +29,14 @@ export default async function InternalPage({ params, searchParams }: {
     [client.id, inputMonth]);
   const manualMap = Object.fromEntries(manualRows.map((r) => [String(r.metric), Number(r.value)]));
 
-  const [creatives, assets, runs] = await Promise.all([
+  const [creatives, assets, runs, rfm] = await Promise.all([
     getCreatives(client.id),
     db.query<{ id: string; filename: string; mime_type: string | null }>(
       `select id, filename, mime_type from creative_assets where client_id = $1 order by filename`, [client.id]),
     db.query<{ source: string; ran_at: string; rows_upserted: number; anomalies: unknown }>(
       `select source, ran_at::text as ran_at, rows_upserted, anomalies
        from sync_runs where client_id = $1 order by ran_at desc limit 8`, [client.id]),
+    getRfmSegments(client.id),
   ]);
 
   const month = (await latestDay(client.id)).slice(0, 7) + "-01";
@@ -74,6 +76,43 @@ export default async function InternalPage({ params, searchParams }: {
         </p>
         <GoalEditor slug={slug} month={month} initial={goalMap} />
       </div>
+
+      {rfm && rfm.winbackTotal > 0 && (
+        <div id="winback" className="card p-4" style={{ scrollMarginTop: "100px" }}>
+          <h3 className="mb-1 text-sm font-semibold">
+            Win-back queue — {num(rfm.winbackTotal)} lost regulars · {inrCompact(rfm.winbackRevenue)} lifetime spend
+          </h3>
+          <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
+            Repeat buyers (2+ orders) with no order in 90+ days, highest lifetime spend first — the
+            first names to load into a WhatsApp win-back campaign. Recency measured from the latest
+            order on file ({rfm.asOf}).{rfm.winbackTotal > rfm.winback.length ? ` Showing top ${rfm.winback.length}.` : ""}
+          </p>
+          <div style={{ overflowX: "auto" }}>
+            <table className="w-full text-xs tabular">
+              <thead>
+                <tr className="text-left" style={{ color: "var(--text-muted)" }}>
+                  <th className="py-1 pr-4 font-medium">Customer</th>
+                  <th className="py-1 pr-4 font-medium">Email</th>
+                  <th className="py-1 pr-4 font-medium">Orders</th>
+                  <th className="py-1 pr-4 font-medium">Lifetime spend</th>
+                  <th className="py-1 pr-4 font-medium">Last order</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rfm.winback.map((c) => (
+                  <tr key={c.email} style={{ borderTop: "1px solid var(--border-hairline)" }}>
+                    <td className="py-1.5 pr-4">{c.name || "—"}</td>
+                    <td className="py-1.5 pr-4">{c.email}</td>
+                    <td className="py-1.5 pr-4">{num(c.orders)}</td>
+                    <td className="py-1.5 pr-4 font-semibold">{inr(c.lifetimeSpend)}</td>
+                    <td className="py-1.5 pr-4">{c.lastOrder}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3 md:grid-cols-3">
         <div className="card p-4">

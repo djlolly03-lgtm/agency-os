@@ -1,9 +1,20 @@
 import Link from "next/link";
 import { Lock, UserPlus, Repeat } from "lucide-react";
 import type { CustomerMonth } from "@/lib/queries";
-import { inr, inrCompact, num, pct, monthLabel, ratio } from "@/lib/format";
+import type { RfmResult, RfmSegmentKey } from "@/lib/shopify";
+import { RFM_RULES } from "@/lib/shopify";
+import { inr, inrCompact, num, pct, monthLabel, dayLabel, ratio } from "@/lib/format";
 import { AnimatedNumber } from "@/components/motion";
 import { Explain } from "@/components/explain";
+
+const SEGMENT_COLOR: Record<RfmSegmentKey, string> = {
+  champions: "var(--brand)",
+  slipping: "var(--status-warning)",
+  lost_regulars: "var(--status-critical)",
+  fresh: "var(--series-1)",
+  cooling_one: "var(--brand-accent)",
+  one_and_done: "var(--text-muted)",
+};
 
 const SOURCE = "Client-reported monthly counts + Shopify totals + paid spend · Sheets → Supabase";
 
@@ -14,9 +25,10 @@ const SOURCE = "Client-reported monthly counts + Shopify totals + paid spend · 
  *   LTV      = AOV ÷ (1 − repeat rate)   (geometric repeat model)
  *   LTV:CAC  = the agency's report card
  */
-export function CustomerEconomics({ months, slug, measuredLtv }: {
+export function CustomerEconomics({ months, slug, measuredLtv, rfm }: {
   months: CustomerMonth[]; slug: string;
   measuredLtv?: { ltv: number | null; customers: number; orders: number } | null;
+  rfm?: RfmResult | null;
 }) {
   const withData = months.filter((m) => m.hasData && m.ltvCac != null);
   const latest = withData[withData.length - 1];
@@ -294,6 +306,39 @@ export function CustomerEconomics({ months, slug, measuredLtv }: {
               ))}
           </div>
 
+          {/* who drove the revenue — new vs returning, measured from orders */}
+          {latest.newRevenue != null && latest.repeatRevenue != null && latest.newRevenue + latest.repeatRevenue > 0 && (() => {
+            const totalRev = latest.newRevenue! + latest.repeatRevenue!;
+            const repShare = latest.repeatRevenue! / totalRev;
+            return (
+              <Explain block math={{
+                title: `Who drove the revenue · ${mLabel}`,
+                steps: [
+                  { label: "Revenue from first-purchase orders", value: inrCompact(latest.newRevenue!) },
+                  { label: "Revenue from returning customers", value: inrCompact(latest.repeatRevenue!) },
+                  { label: "Store revenue observed in the order export", value: inrCompact(totalRev) },
+                ],
+                formula: `returning share = ${inrCompact(latest.repeatRevenue!)} ÷ ${inrCompact(totalRev)} = ${pct(repShare)}`,
+                note: "Measured from the Shopify order-level export (online orders with the order history on file). A rising returning share means the base is compounding — revenue that arrives without new acquisition spend.",
+                source: "Shopify order export · Sheets → Supabase",
+                link: { href: `/${slug}/monthly`, label: "Monthly report →" },
+              }}>
+                <div className="mb-1 flex items-baseline justify-between text-[11px]">
+                  <span style={{ color: "var(--text-muted)" }}>Who drove {mLabel}&rsquo;s revenue</span>
+                  <span className="font-bold tabular" style={{ color: "var(--text-primary)" }}>{pct(repShare, 0)} returning</span>
+                </div>
+                <div className="flex h-4 w-full overflow-hidden rounded-md" style={{ background: "var(--grid)" }}>
+                  <div style={{ width: `${100 * (1 - repShare)}%`, background: "var(--brand)" }} />
+                  <div style={{ width: `${100 * repShare}%`, background: "var(--brand-accent)", opacity: 0.9 }} />
+                </div>
+                <div className="mt-1 flex justify-between text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  <span>new {inrCompact(latest.newRevenue!)}</span>
+                  <span>returning {inrCompact(latest.repeatRevenue!)}</span>
+                </div>
+              </Explain>
+            );
+          })()}
+
           {measuredLtv?.ltv != null && (
             <Explain block math={{
               title: "Measured LTV (revenue-to-date per customer)",
@@ -389,6 +434,65 @@ export function CustomerEconomics({ months, slug, measuredLtv }: {
           </p>
         </div>
       </div>
+
+      {/* ===== the customer base, segmented — who to act on this week ===== */}
+      {rfm && (
+        <div className="mt-8 border-t pt-6" style={{ borderColor: "var(--border-hairline)" }}>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <Explain block math={{
+              title: "How customers are segmented",
+              steps: rfm.segments.map((s) => ({
+                label: s.label,
+                value: s.key === "champions" ? `2+ orders · active ≤${RFM_RULES.activeDays}d`
+                  : s.key === "slipping" ? `2+ orders · quiet ${RFM_RULES.activeDays + 1}–${RFM_RULES.lapsedDays}d`
+                  : s.key === "lost_regulars" ? `2+ orders · gone >${RFM_RULES.lapsedDays}d`
+                  : s.key === "fresh" ? `1 order · within ${RFM_RULES.activeDays}d`
+                  : s.key === "cooling_one" ? `1 order · ${RFM_RULES.activeDays + 1}–${RFM_RULES.lapsedDays}d ago`
+                  : `1 order · >${RFM_RULES.lapsedDays}d ago`,
+              })),
+              formula: `repeat = 2+ orders · active ≤${RFM_RULES.activeDays}d · cooling ${RFM_RULES.activeDays + 1}–${RFM_RULES.lapsedDays}d · lapsed >${RFM_RULES.lapsedDays}d`,
+              note: `Recency is measured from the latest order on file (${dayLabel(rfm.asOf)}), not the calendar. ${num(rfm.anonOrders)} orders had no email and are excluded — they can't be contacted anyway.`,
+              source: "Shopify order export · Sheets → Supabase",
+            }}>
+              <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
+                The customer base, right now · {num(rfm.totalCustomers)} people ·{" "}
+                <span style={{ color: "var(--brand)" }}>click for the rules</span>
+              </span>
+            </Explain>
+            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>as of {dayLabel(rfm.asOf)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            {rfm.segments.map((s) => {
+              const color = SEGMENT_COLOR[s.key];
+              return (
+                <div key={s.key} className="rounded-xl border px-3.5 py-3" style={{ borderColor: "var(--border-hairline)" }}>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                    <span aria-hidden className="h-2 w-2 rounded-full" style={{ background: color }} />
+                    {s.label}
+                  </div>
+                  <div className="mt-1 text-2xl font-bold tabular" style={{ color: "var(--text-primary)" }}>
+                    {num(s.customers)}
+                  </div>
+                  <div className="text-[10px] tabular" style={{ color: "var(--text-muted)" }}>
+                    {inrCompact(s.lifetimeRevenue)} lifetime
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-4" style={{ color: "var(--text-muted)" }}>{s.desc}</p>
+                </div>
+              );
+            })}
+          </div>
+          {rfm.winbackTotal > 0 && (
+            <p className="mt-3 text-[12px] leading-5" style={{ color: "var(--text-secondary)" }}>
+              <strong className="tabular" style={{ color: "var(--status-critical)" }}>{inrCompact(rfm.winbackRevenue)}</strong>{" "}
+              of lifetime spend sits with <strong className="tabular">{num(rfm.winbackTotal)}</strong>{" "}
+              lost regulars — proven repeat buyers who&rsquo;ve gone quiet.{" "}
+              <Link href={`/${slug}/internal#winback`} className="underline" style={{ color: "var(--brand)" }}>
+                Win-back list, names and emails →
+              </Link>
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

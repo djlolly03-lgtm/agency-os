@@ -454,3 +454,78 @@ h3 { font-weight: 700; }
 }
 .spot-stage:hover .spot-glow { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .spot-stage .spot-glow { display: none; } }
+
+/* ---- monthly review: screen layout ---- */
+.review-page { max-width: 900px; margin: 0 auto; }
+.review-block { break-inside: avoid; page-break-inside: avoid; margin-bottom: 22px; }
+.review-h2 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-style: italic;
+  font-size: 1.55rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+}
+.review-h3 { font-size: 0.95rem; font-weight: 700; letter-spacing: -0.01em; }
+.review-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.review-table th {
+  text-align: left; font-weight: 600; font-size: 0.68rem;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); padding: 7px 10px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+.review-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-hairline); }
+.review-table tr:last-child td { border-bottom: none; }
+.review-table tfoot td { font-weight: 700; border-top: 2px solid var(--border-hairline); }
+
+/* ---- print: turn the review into the deck ----
+   The nav is fixed-position and the app is dark-first; both fight paper.
+   Force an ink-friendly light palette, drop the chrome, and break pages at
+   act boundaries so no table is split across a page. */
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+
+  /* only the app chrome — NOT content <header>/<footer> elements, which the
+     review page uses for its cover and sign-off */
+  .no-print, .cinema { display: none !important; }
+
+  html, body {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  /* the app's tokens are dark-first — repoint them at paper */
+  :root, :root[data-theme="dark"], :root[data-theme="light"] {
+    --page: #ffffff;
+    --surface-1: #ffffff;
+    --surface-2: #ffffff;
+    --text-primary: #111111;
+    --text-secondary: #333333;
+    --text-muted: #666666;
+    --border-hairline: #cccccc;
+    --grid: #eeeeee;
+  }
+  .card, .canvas-dark {
+    background: #ffffff !important;
+    border: 1px solid #dddddd !important;
+    box-shadow: none !important;
+    color: #111111 !important;
+  }
+  /* main content sits under a fixed header on screen; not on paper */
+  body > div > div { padding-top: 0 !important; }
+
+  .review-page { max-width: none; }
+  .page-break { break-before: page; page-break-before: always; }
+  .review-block { break-inside: avoid; page-break-inside: avoid; }
+
+  /* gradient text prints as invisible on white */
+  .num-gradient {
+    background: none !important;
+    -webkit-background-clip: initial !important;
+    background-clip: initial !important;
+    -webkit-text-fill-color: #111111 !important;
+    color: #111111 !important;
+  }
+  a { text-decoration: none !important; color: inherit !important; }
+  details { break-inside: avoid; }
+  details > summary { display: none !important; }   /* print the contents, not the toggle */
+}
