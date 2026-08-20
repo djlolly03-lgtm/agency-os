@@ -388,7 +388,9 @@ export default async function ReviewPage({ params, searchParams }: {
           </table>
           <p className="text-[10.5px] leading-4" style={{ color: "var(--text-muted)" }}>
             Platforms self-attribute and can both claim one order, so channel rows deliberately don&rsquo;t
-            sum; Direct&rsquo;s order count and AOV stay blank for the same reason. The Total row reconciles to Shopify.
+            sum; Direct&rsquo;s order count and AOV stay blank for the same reason. Google&rsquo;s ROAS includes
+            brand search — buyers already looking for us — so read it with that discount. The Total row
+            reconciles to Shopify.
           </p>
         </div>
 
@@ -455,8 +457,14 @@ export default async function ReviewPage({ params, searchParams }: {
 
         {cart.length >= 4 && (
           <div className="mt-6 flex flex-col gap-3">
+            {/* ops correction (20 Aug walkthrough): the falling rate is partly
+                MIX — recent top-of-funnel campaigns buy cheap add-to-carts by
+                design — and abandoned carts are already worked by the WhatsApp
+                flows. The chart stays; the leak framing doesn't. */}
             {qa("Question 02", "Where is money leaking?",
-              cartHalved ? "At the cart — the add-to-cart → purchase rate has roughly halved." : "Watch the cart — conversion after add-to-cart is drifting down.")}
+              cartHalved
+                ? "Less at the cart than the chart suggests — the rate halved partly because top-of-funnel campaigns buy cheap add-to-carts by design."
+                : "Watch the cart mix — conversion after add-to-cart drifts down as top-of-funnel spend grows.")}
             <div className="rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-hairline)" }}>
               <div className="flex items-end gap-2" style={{ height: 110 }}>
                 {cart.map((f) => {
@@ -475,10 +483,12 @@ export default async function ReviewPage({ params, searchParams }: {
                 })}
               </div>
               <p className="mt-3 text-[11.5px] leading-5" style={{ color: "var(--text-secondary)" }}>
-                {dropped != null && <><strong className="tabular">{num(dropped)}</strong> carts were abandoned after add-to-cart in {mLabel}. </>}
-                Checkout shows no delivery date — for perishables that&rsquo;s a trust question before it&rsquo;s a payment
-                question, and the drop-off calls on page 05 settle which. Per-SKU stock-out spend joins this page
-                once the product table lands (ask on page 05).
+                {dropped != null && <><strong className="tabular">{num(dropped)}</strong> add-to-carts didn&rsquo;t convert in {mLabel} — inflated
+                by top-of-funnel campaigns whose job is reach, not immediate checkout. </>}
+                Abandoned carts are already worked by the WhatsApp flows (SuperAGI + NitroOps), so outreach
+                isn&rsquo;t the gap; the open questions are whether checkout communicates a delivery date, and how
+                much of the drop is TOF mix — splitting this chart by campaign objective would answer that.
+                Per-SKU stock-out spend joins this page once the product table lands (ask on page 05).
               </p>
             </div>
           </div>

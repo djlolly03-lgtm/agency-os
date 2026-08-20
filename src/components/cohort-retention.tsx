@@ -28,9 +28,17 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
   const firstCohort = cohorts[0].cohortMonth;
   const calendarMonths = Array.from({ length: maxOffset + 1 }, (_, i) => addMonths(firstCohort, i));
 
+  // The first cohort is LEFT-CENSORED: the export starts there, so anyone
+  // who'd been buying for years before shows up as "new" in that month —
+  // its retention reads high because it's really the loyal-customer stock,
+  // not a signup class (ops flag from the 20 Aug walkthrough). It stays in
+  // the grid, marked, but sits outside every average and comparison.
+  const censoredMonth = cohorts[0].cohortMonth;
+
   // month-1 retention: the one offset every cohort but the newest has —
   // the fairest single number to compare cohorts against each other
-  const withM1 = cohorts.filter((c) => c.retained.length > 1 && c.retained[1] != null);
+  const withM1 = cohorts.filter((c) =>
+    c.cohortMonth !== censoredMonth && c.retained.length > 1 && c.retained[1] != null);
   const m1Fracs = withM1.map((c) => ({ c, frac: c.retained[1]! / c.size }));
   const avgM1 = m1Fracs.length ? m1Fracs.reduce((a, b) => a + b.frac, 0) / m1Fracs.length : null;
   const best = m1Fracs.length ? [...m1Fracs].sort((a, b) => b.frac - a.frac)[0] : null;
@@ -60,7 +68,7 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
             title: "Average second-purchase rate",
             steps: m1Fracs.map(({ c, frac }) => ({ label: `${shortMonth(c.cohortMonth)} cohort (${num(c.size)} customers)`, value: pct(frac) })),
             formula: avgM1 != null ? `average = ${m1Fracs.map(({ frac }) => pct(frac, 0)).join(" + ")} ÷ ${m1Fracs.length} = ${pct(avgM1)}` : "not enough data yet",
-            note: "The % of a signup month's customers who came back and bought again within the following month — the clearest single read on whether the first purchase experience is working.",
+            note: `The % of a signup month's customers who came back and bought again within the following month — the clearest single read on whether the first purchase experience is working. ${shortMonth(censoredMonth)} is excluded: the order history starts there, so that "cohort" mixes genuinely-new buyers with long-time customers whose earlier orders we can't see.`,
             source: "Shopify order export · Sheets → Supabase",
           }}>
             <span className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
@@ -103,6 +111,7 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
               {cohorts.map((c) => {
                 const isBest = best?.c.cohortMonth === c.cohortMonth;
                 const isWorst = worst?.c.cohortMonth === c.cohortMonth;
+                const isCensored = c.cohortMonth === censoredMonth;
                 return (
                   <tr key={c.cohortMonth}>
                     <td className="whitespace-nowrap rounded-l-md px-2 py-1.5 font-semibold"
@@ -111,6 +120,7 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
                         borderLeft: isBest ? "3px solid #2fd9ba" : isWorst ? "3px solid #ef8c33" : "3px solid transparent",
                       }}>
                       {shortMonth(c.cohortMonth)}
+                      {isCensored && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>incl. pre-data customers</span>}
                       {isBest && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "#2fd9ba" }}>stickiest</span>}
                       {isWorst && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "#ef8c33" }}>weakest</span>}
                     </td>
@@ -159,6 +169,11 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#ef8c33" }} /> below average
           </span>
           <span>· columns are real calendar months · "signup" = the month they first bought · blank = too soon to tell</span>
+          <span>
+            · the {shortMonth(censoredMonth)} row mixes new buyers with long-time customers whose earlier
+            orders pre-date the export — its high retention is loyalty we inherited, not a signup-class
+            result, so it sits outside the average and the stickiest/weakest call
+          </span>
         </div>
       </div>
     </SpotlightStage>

@@ -40,9 +40,13 @@ export function ChannelDuel({ platforms, periodLabel }: {
   const bestCpa = rows.filter((r) => r.cpa != null).sort((a, b) => a.cpa! - b.cpa!)[0];
   const bestCpm = rows.filter((r) => r.cpm != null).sort((a, b) => a.cpm! - b.cpm!)[0];
 
-  // the move: underdog earns meaningfully more per rupee but gets the small share
+  // the move: underdog earns meaningfully more per rupee but gets the small share.
+  // Google's ROAS carries brand-search cannibalization (people already looking
+  // for Organik Truck mostly convert anyway) — ops flag, 20 Aug — so a shift
+  // toward Google is always caveated, never presented as free money.
+  const googleWins = winner.platform === "google";
   const move = winner.roas > loser.roas * 1.1 && winner.share < 0.4
-    ? `shift 10–15% of ${loser.name} budget into ${winner.name} and re-measure in 4 weeks — at current rates every reallocated lakh is worth ≈${inrCompact((winner.roas - loser.roas) * 1_00_000)} more revenue.`
+    ? `shift 10–15% of ${loser.name} budget into ${winner.name} and re-measure in 4 weeks — at current rates every reallocated lakh is worth ≈${inrCompact((winner.roas - loser.roas) * 1_00_000)} more revenue.${googleWins ? " One check first: part of Google's return is brand search — buyers who'd have found us anyway — so expect the realized lift to land under the headline gap." : ""}`
     : winner.roas > loser.roas * 1.1
       ? `${winner.name} already gets the bigger share and still earns more per rupee — keep feeding it, and treat ${loser.name} as the testing ground.`
       : `the platforms are close on return — split by role (reach vs closing), not by ROAS alone.`;

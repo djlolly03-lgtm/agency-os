@@ -116,6 +116,17 @@ and how much effort it takes. Priority order.
   modelled) number, plus whether drop-off concentrates in particular SKUs or delivery
   pincodes — which would separate a payment-method problem from a delivery-promise one.
 
+### 16. Delivery address / phone column in the Shopify extract — de-anonymize 12% of orders
+- **Why:** ~823 orders (~12%) have no email and count as one-off anonymous customers,
+  which understates repeat rate, measured LTV, and every RFM segment. Ops suggestion
+  from the 20 Aug walkthrough: match on **delivery address** (or phone) instead —
+  most email-less orders still carry both.
+- **How:** add phone and/or delivery-address columns to the "5.Shopify Extract" tab
+  (same export, two more columns). Identity becomes email → phone → normalized
+  address, in that order.
+- **Unlocks:** truer repeat numbers everywhere the customer engine reads, and those
+  823 orders join the win-back universe instead of being unreachable.
+
 ---
 
 ## P4 — Validation

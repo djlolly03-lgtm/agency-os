@@ -181,7 +181,9 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         text: `${googleBetter ? "Google" : "Meta"} outperformed ${googleBetter ? "Meta" : "Google"} on ROAS (${(googleBetter ? google : meta).roas.toFixed(2)}× vs ${(googleBetter ? meta : google).roas.toFixed(2)}×).`,
         tone: "info",
         severity: "watch",
-        action: `Consider shifting incremental budget toward ${googleBetter ? "Google" : "Meta"} while the gap holds.`,
+        action: googleBetter
+          ? "Consider shifting incremental budget toward Google — after checking how much of its revenue is brand search."
+          : "Consider shifting incremental budget toward Meta while the gap holds.",
         math: {
           steps: [
             { label: `Meta spend (${monthLabel})`, value: compact(meta.spend) },
@@ -194,7 +196,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
           formula: googleBetter
             ? `gap = ${google.roas.toFixed(2)} ÷ ${meta.roas.toFixed(2)} − 1 = +${pctGap}%`
             : `gap = ${meta.roas.toFixed(2)} ÷ ${google.roas.toFixed(2)} − 1 = +${pctGap}%`,
-          note: "Each platform self-attributes — treat cross-platform comparison directionally.",
+          note: "Each platform self-attributes — treat cross-platform comparison directionally. Google's ROAS also carries brand-search cannibalization: people already searching for Organik Truck would mostly have converted anyway, which flatters its return vs Meta's colder audiences.",
         },
         link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
       });
@@ -415,7 +417,7 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
           })),
         ],
         formula: `qualifies if ROAS ≥ 1.5 × ${baseRoas.toFixed(2)} = ${(1.5 * baseRoas).toFixed(2)}× AND spend share < 5%`,
-        note: "High ROAS at low spend often means the algorithm found a pocket — scale carefully.",
+        note: "High ROAS at low spend often means the algorithm found a pocket — scale carefully. Below ~₹2k of spend a ROAS figure is closer to noise than signal (ops rule of thumb: real reads start at ₹4–5k/day bid-cap budgets).",
       },
       link: { href: `/${slug}/creatives?status=hidden_gem`, label: "See hidden gems →" },
     });
