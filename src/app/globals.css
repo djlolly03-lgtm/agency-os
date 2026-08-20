@@ -478,6 +478,9 @@ h3 { font-weight: 700; }
 .review-table tr:last-child td { border-bottom: none; }
 .review-table tfoot td { font-weight: 700; border-top: 2px solid var(--border-hairline); }
 
+/* print-only: hidden on screen, shown on paper (editable rows print as clean tables) */
+.print-only { display: none; }
+
 /* ---- print: turn the review into the deck ----
    The nav is fixed-position and the app is dark-first; both fight paper.
    Force an ink-friendly light palette, drop the chrome, and break pages at
@@ -528,4 +531,5 @@ h3 { font-weight: 700; }
   a { text-decoration: none !important; color: inherit !important; }
   details { break-inside: avoid; }
   details > summary { display: none !important; }   /* print the contents, not the toggle */
+  .print-only { display: table !important; }        /* static twins of editable rows */
 }

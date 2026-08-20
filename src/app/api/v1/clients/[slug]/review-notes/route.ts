@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { getReviewNotes, setReviewNote, REVIEW_SECTIONS } from "@/lib/queries";
 import { withClient } from "../route-helpers";
 
-const ALLOWED = new Set<string>(REVIEW_SECTIONS.map((s) => s.key));
-const MAX_BODY = 4000;
+const ALLOWED = new Set<string>([
+  ...REVIEW_SECTIONS.map((s) => s.key),
+  "commitments",   // JSON array of {text, owner, due, proof, status}
+  "next_month",    // legacy prose plan from before the decision-memo layout
+]);
+const MAX_BODY = 8000;   // commitments ride as JSON — needs more headroom than prose
 
 /** GET ?month=YYYY-MM-01 → that month's narrative sections; POST { month, section, body } to save. */
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {

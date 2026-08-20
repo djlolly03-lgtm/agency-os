@@ -576,6 +576,28 @@ export async function getFunnel(clientId: string, range: Range, filter?: {
   };
 }
 
+/**
+ * Monthly funnel-event rollup (Meta ad-level facts) — feeds the review's
+ * cart-decay chart: add-to-cart → purchase rate by month.
+ */
+export async function getFunnelMonthly(clientId: string) {
+  const db = await getDb();
+  const rows = await db.query<{ month: string; lp: number; atc: number; purchases: number }>(
+    `select to_char(date_trunc('month', f.day), 'YYYY-MM-01') as month,
+            sum(f.lp_views) lp, sum(f.adds_to_cart) atc, sum(f.purchases) purchases
+     from fact_ad_daily f
+     join ads a on a.id = f.ad_id
+     join ad_sets s on s.id = a.ad_set_id
+     join campaigns ca on ca.id = s.campaign_id
+     join ad_accounts aa on aa.id = ca.ad_account_id
+     where aa.client_id = $1
+     group by 1 order by 1`, [clientId]);
+  return rows.map((r) => ({
+    month: String(r.month), lp: N(r.lp), atc: N(r.atc), purchases: N(r.purchases),
+    atcToBuy: N(r.atc) > 0 ? N(r.purchases) / N(r.atc) : null,
+  }));
+}
+
 /** Daily blended totals for heatmaps (trailing N days). */
 export async function getDailyBlended(clientId: string, days = 91) {
   const db = await getDb();
@@ -796,14 +818,19 @@ export async function getGoals(clientId: string, month: string) {
 
 // ---------- monthly review notes (the narrative the data can't produce) ----------
 
-/** Sections of the monthly review a human writes, in the order they're presented. */
+/**
+ * Prose sections of the monthly review a human writes. The forward plan is
+ * NOT prose anymore — it's the structured `commitments` section (JSON array
+ * in the same table; see src/components/commitments.tsx), so it can be
+ * stamped Done/Partial/Missed on next month's accountability page.
+ * "next_month" remains accepted by the API for rows written before the
+ * decision-memo restructure.
+ */
 export const REVIEW_SECTIONS = [
   { key: "challenges", label: "Challenges this month",
     hint: "What held the numbers back — stock-outs, learning-phase resets, competition, returns." },
-  { key: "next_month", label: "Next month's plan",
-    hint: "Where budget goes, what we're testing, which categories get the push." },
-  { key: "support_needed", label: "What we need from you",
-    hint: "Stock availability, content, approvals, budget — the asks that unblock the plan." },
+  { key: "support_needed", label: "Blocked until we receive",
+    hint: "Stock availability, content, approvals, data — the asks that unblock the plan." },
 ] as const;
 
 export type ReviewSectionKey = (typeof REVIEW_SECTIONS)[number]["key"];

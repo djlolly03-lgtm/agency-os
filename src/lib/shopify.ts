@@ -244,6 +244,9 @@ export interface RfmResult {
   winback: WinbackCustomer[];   // lost regulars, highest lifetime spend first
   winbackTotal: number;         // all lost regulars (winback is capped for display)
   winbackRevenue: number;       // lifetime revenue sitting with lost regulars
+  // the concentration story: heavy repeaters as a lookalike seed
+  fivePlusCustomers: number;    // customers with 5+ orders
+  fivePlusRevenueShare: number; // their share of all identifiable lifetime revenue (0–1)
 }
 
 const SEGMENT_META: Record<RfmSegmentKey, { label: string; desc: string }> = {
@@ -281,7 +284,10 @@ export async function getRfmSegments(clientId: string): Promise<RfmResult | null
   for (const k of keys) seg.set(k, { customers: 0, lifetimeRevenue: 0 });
 
   const lost: WinbackCustomer[] = [];
+  let fivePlusCustomers = 0, fivePlusRevenue = 0, allRevenue = 0;
   for (const [email, c] of cust) {
+    allRevenue += c.total;
+    if (c.orders >= 5) { fivePlusCustomers++; fivePlusRevenue += c.total; }
     const daysSince = Math.floor((refMs - Date.parse(c.last + "T00:00:00Z")) / 86400000);
     const repeat = c.orders >= 2;
     const band = daysSince <= RFM_RULES.activeDays ? 0 : daysSince <= RFM_RULES.lapsedDays ? 1 : 2;
@@ -305,5 +311,7 @@ export async function getRfmSegments(clientId: string): Promise<RfmResult | null
     winback: lost.slice(0, 30),
     winbackTotal: lost.length,
     winbackRevenue: lost.reduce((s, c) => s + c.lifetimeSpend, 0),
+    fivePlusCustomers,
+    fivePlusRevenueShare: allRevenue > 0 ? fivePlusRevenue / allRevenue : 0,
   };
 }
