@@ -15,7 +15,8 @@ import { ReviewNote } from "@/components/review-note";
 import { PrintButton } from "@/components/print-button";
 import { CommitmentsEditor, CommitmentCheckins } from "@/components/commitments";
 import { parseCommitments } from "@/lib/commitments";
-import { monthEndDay } from "@/lib/periods";
+import { monthEndDay, shortMonth } from "@/lib/periods";
+import { RevenueTrend, Donut, Waterfall, HCompare, ColumnChart, SegmentBar } from "@/components/review-charts";
 
 /**
  * The monthly review as a DECISION MEMO — not a stats report. Structure:
@@ -34,16 +35,12 @@ const SEV_CHIP: Record<string, { label: string; bg: string; fg: string }> = {
   fyi: { label: "Note", bg: "var(--grid)", fg: "var(--text-secondary)" },
 };
 
-function Masthead({ n, label, client }: { n: string; label: string; client: string }) {
+/** Brand title band — each memo page opens with one; prints in full color. */
+function PageBand({ n, title, client }: { n: string; title: string; client: string }) {
   return (
-    <div className="mb-4 flex items-baseline justify-between gap-3 border-b-2 pb-2"
-      style={{ borderColor: "var(--text-primary)" }}>
-      <span className="text-[10px] font-extrabold uppercase tracking-[0.18em]" style={{ color: "var(--brand)" }}>
-        {client} — Performance review
-      </span>
-      <span className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
-        {n} · {label}
-      </span>
+    <div className="review-band review-block">
+      <span className="review-band-title">{title}</span>
+      <span className="review-band-no">{n} · {client}</span>
     </div>
   );
 }
@@ -150,7 +147,6 @@ export default async function ReviewPage({ params, searchParams }: {
         { label: "Organic", delta: row.organicRevenue - prevRow.organicRevenue },
       ]
     : null;
-  const bridgeMax = bridge ? Math.max(...bridge.map((b) => Math.abs(b.delta)), 1) : 1;
 
   // ---- channel table (Direct order-count/AOV deliberately blank — the
   // residual order count is polluted by platform double-claiming) ----
@@ -164,7 +160,6 @@ export default async function ReviewPage({ params, searchParams }: {
 
   // ---- cart decay ----
   const cart = funnelMonthly.filter((f) => f.atc > 0 && f.atcToBuy != null).slice(-9);
-  const cartMax = Math.max(...cart.map((f) => f.atcToBuy!), 0.01);
   const cartSel = funnelMonthly.find((f) => f.month === month);
   const dropped = cartSel ? Math.max(0, Math.round(cartSel.atc - cartSel.purchases)) : null;
   const cartFirst = cart[0], cartLast = cart[cart.length - 1];
@@ -187,6 +182,11 @@ export default async function ReviewPage({ params, searchParams }: {
     nameRollups.map((r) => classifyProduce(r.campaign, r.ad)?.key).filter(Boolean) as string[]);
   const radar = seasonRadar(produceAgg, monthNum, historicalKeys);
   const closingKeys = new Set(radar.closing.map((c) => c.produce.key));
+
+  // last 10 months of revenue — cover skyline + the trend chart on page 01
+  const trendPoints = report.slice(-10).map((r) => ({
+    month: r.month, value: r.totalRevenue ?? (r.meta.revenue + r.google.revenue),
+  }));
 
   const challenges = REVIEW_SECTIONS.find((s) => s.key === "challenges")!;
   const support = REVIEW_SECTIONS.find((s) => s.key === "support_needed")!;
@@ -225,21 +225,52 @@ export default async function ReviewPage({ params, searchParams }: {
         </div>
       )}
 
-      {/* ============ 01 · THE VERDICT ============ */}
-      <section className="review-block card px-6 py-6">
-        <Masthead n="01" label="The verdict" client={client.name} />
-        <h1 className="review-h2" style={{ fontSize: "1.95rem", lineHeight: 1.18 }}>
+      {/* ============ COVER ============ */}
+      <div className="review-cover review-block">
+        <div className="text-[10px] font-extrabold uppercase tracking-[0.2em]" style={{ color: "#7ff0d8" }}>
+          {client.name} · Monthly performance review · {mLabel}
+        </div>
+        <h1 className="mt-3" style={{
+          fontFamily: "var(--font-serif), Georgia, serif", fontStyle: "italic", fontWeight: 500,
+          fontSize: "2.5rem", lineHeight: 1.15, letterSpacing: "-0.02em", color: "#ffffff", maxWidth: 640,
+        }}>
           {mLabel} {verb} {inrCompact(totalRevenue)} — {tail}.
         </h1>
-        <p className="mt-1 text-[13px] leading-6" style={{ color: "var(--text-secondary)", maxWidth: 620 }}>
+        <p className="mt-3 text-[13px] leading-6" style={{ color: "rgba(255,255,255,0.72)", maxWidth: 560 }}>
           {calls.filter((c) => c.severity === "critical").length > 0
-            ? `${calls.filter((c) => c.severity === "critical").length} of the calls below can't wait. `
-            : "Nothing below is on fire. "}
-          The rest of this document is evidence, in the order the decisions need it.
+            ? `${calls.filter((c) => c.severity === "critical").length} of the calls inside can't wait. `
+            : "Nothing inside is on fire. "}
+          Everything else in this document is evidence, in the order the decisions need it.
         </p>
+        {/* skyline — fixed colors, this block stays dark on paper too */}
+        {trendPoints.length > 2 && (
+          <svg viewBox="0 0 680 64" className="mt-6" style={{ width: "100%", height: "auto", display: "block" }} aria-hidden>
+            {trendPoints.map((p, i) => {
+              const max = Math.max(...trendPoints.map((t) => t.value), 1);
+              const bw = (680 - 8 * (trendPoints.length - 1)) / trendPoints.length;
+              const h = Math.max(4, (p.value / max) * 58);
+              const sel = p.month === month;
+              return <rect key={p.month} x={i * (bw + 8)} y={64 - h} width={bw} height={h} rx="3"
+                fill={sel ? "#7ff0d8" : "rgba(23,179,154,0.45)"} />;
+            })}
+          </svg>
+        )}
+        <div className="mt-4 flex items-baseline justify-between gap-4">
+          <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.55)" }}>
+            Prepared by Pixel Mint Media · every figure recomputed from Meta, Google Ads and Shopify
+          </span>
+          <span className="tabular text-[10px]" style={{ color: "rgba(255,255,255,0.55)" }}>
+            {new Date().toISOString().slice(0, 10)}
+          </span>
+        </div>
+      </div>
+
+      {/* ============ 01 · THE VERDICT ============ */}
+      <PageBand n="01 · The verdict" title="The month, graded." client={client.name} />
+      <section className="review-block card px-6 py-6">
 
         {/* graded numbers */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border px-3.5 py-3" style={{ borderColor: "var(--border-hairline)" }}>
             <div className="flex items-center gap-1.5"><Dot tone={revDelta == null ? "mute" : revDelta >= 0 ? "good" : "warn"} />
               <span className="text-[9.5px] font-extrabold uppercase tracking-[0.12em]" style={{ color: "var(--text-muted)" }}>Revenue</span></div>
@@ -272,6 +303,16 @@ export default async function ReviewPage({ params, searchParams }: {
           </div>
         </div>
 
+        {/* the shape of the account */}
+        {trendPoints.length > 2 && (
+          <div className="mt-6 flex flex-col gap-2">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.16em]">
+              The last {trendPoints.length} months · {mLabel} highlighted
+            </div>
+            <RevenueTrend points={trendPoints} selected={month} />
+          </div>
+        )}
+
         {/* the calls */}
         {calls.length > 0 && (
           <div className="mt-6 flex flex-col gap-3">
@@ -302,9 +343,9 @@ export default async function ReviewPage({ params, searchParams }: {
 
       {/* ============ 02 · SAID VS HAPPENED ============ */}
       <div className="page-break" />
+      <PageBand n="02 · Said vs happened" client={client.name}
+        title={`What we said in ${prevLabel} — and what ${mLabel.split(" ")[0]} did.`} />
       <section className="review-block card px-6 py-6">
-        <Masthead n="02" label="Said vs happened" client={client.name} />
-        <h2 className="review-h2">What we said in {prevLabel} — and what {mLabel.split(" ")[0]} did.</h2>
         {hasPrevCommitments ? (
           <CommitmentCheckins slug={slug} prevMonth={prevMonth} prevLabel={prevLabel}
             initial={prevCommitmentsRaw} />
@@ -330,29 +371,10 @@ export default async function ReviewPage({ params, searchParams }: {
               Where the {inrCompact(Math.abs((row.totalRevenue ?? 0) - (prevRow?.totalRevenue ?? 0)))} went — {prevLabel.split(" ")[0]} to {mLabel.split(" ")[0]}
             </div>
             <div className="rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-hairline)" }}>
-              <div className="flex items-baseline justify-between">
-                <span className="tabular text-lg font-extrabold">{inrCompact(prevRow!.totalRevenue!)} <span className="text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>{prevLabel}</span></span>
-                <span className="tabular text-lg font-extrabold">{inrCompact(row.totalRevenue!)} <span className="text-[11px] font-semibold" style={{ color: "var(--text-muted)" }}>{mLabel}</span></span>
-              </div>
-              <div className="mt-3 flex flex-col gap-2">
-                {bridge.map((b) => {
-                  const w = Math.max(6, Math.round((Math.abs(b.delta) / bridgeMax) * 260));
-                  const neg = b.delta < 0;
-                  return (
-                    <div key={b.label} className="flex items-center gap-3">
-                      <span className="w-16 text-[10.5px] font-bold" style={{ color: "var(--text-secondary)" }}>{b.label}</span>
-                      <div className="flex flex-1 items-center">
-                        <div className="flex w-1/2 justify-end">{neg && <div className="h-3.5 rounded" style={{ width: w, background: "var(--status-critical)", opacity: 0.85 }} />}</div>
-                        <div className="w-1/2">{!neg && <div className="h-3.5 rounded" style={{ width: w, background: "var(--status-good)", opacity: 0.9 }} />}</div>
-                      </div>
-                      <span className="tabular w-20 text-right text-[11.5px] font-bold"
-                        style={{ color: neg ? "var(--status-critical)" : "var(--status-good)" }}>
-                        {neg ? "−" : "+"}{inrCompact(Math.abs(b.delta))}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <Waterfall
+                start={{ label: prevLabel.split(" ")[0], value: prevRow!.totalRevenue! }}
+                steps={bridge.map((b) => ({ label: b.label, delta: b.delta }))}
+                end={{ label: mLabel.split(" ")[0], value: row.totalRevenue! }} />
             </div>
           </div>
         )}
@@ -360,6 +382,20 @@ export default async function ReviewPage({ params, searchParams }: {
         {/* the month, reconciled */}
         <div className="mt-6 flex flex-col gap-2">
           <div className="text-[11px] font-extrabold uppercase tracking-[0.16em]">The month, reconciled</div>
+          {totalRevenue > 0 && (
+            <div className="mb-2 rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-hairline)" }}>
+              <Donut
+                centerLabel={inrCompact(totalRevenue)}
+                centerSub="revenue"
+                slices={[
+                  { label: "Meta Ads", value: row.meta.revenue, color: "var(--series-1)", sub: `${ratio(row.meta.spend > 0 ? row.meta.revenue / row.meta.spend : 0)}× ROAS` },
+                  { label: "Google Ads", value: row.google.revenue, color: "var(--series-2)", sub: `${ratio(row.google.spend > 0 ? row.google.revenue / row.google.spend : 0)}× ROAS` },
+                  ...(row.organicRevenue != null && row.organicRevenue > 0
+                    ? [{ label: "Direct / organic", value: row.organicRevenue, color: "var(--series-3)", sub: "no ad spend" }]
+                    : []),
+                ]} />
+            </div>
+          )}
           <table className="review-table">
             <thead>
               <tr><th>Channel</th><th>Ad spend</th><th>Orders</th><th>Revenue</th><th>AOV</th><th>ROAS</th><th>Share</th></tr>
@@ -403,8 +439,8 @@ export default async function ReviewPage({ params, searchParams }: {
 
       {/* ============ 03 · THE LEAKS ============ */}
       <div className="page-break" />
+      <PageBand n="03 · The leaks" title="Where the money stops working." client={client.name} />
       <section className="review-block card px-6 py-6">
-        <Masthead n="03" label="The leaks" client={client.name} />
 
         {cust?.hasData && ltvCac != null && (
           <div className="flex flex-col gap-3">
@@ -419,18 +455,12 @@ export default async function ReviewPage({ params, searchParams }: {
               ltvCac >= 3 ? "var(--status-good)" : ltvCac >= 2 ? "var(--text-primary)" : "var(--status-critical)")}
             <div className="grid gap-4 rounded-2xl border px-5 py-4 sm:grid-cols-[1.3fr_1fr]" style={{ borderColor: "var(--border-hairline)" }}>
               <div className="flex flex-col gap-2.5">
-                <div>
-                  <div className="flex justify-between text-[10.5px]"><span style={{ color: "var(--text-muted)" }} className="font-bold">CAC · new customer</span><span className="tabular font-extrabold">{cust.cacNew != null ? inr(cust.cacNew) : "—"}</span></div>
-                  <div className="mt-1 h-3.5 rounded" style={{ background: "var(--grid)" }}>
-                    {cust.cacNew != null && cust.ltv != null && (
-                      <div className="h-3.5 rounded" style={{ width: `${Math.min(100, (100 * cust.cacNew) / cust.ltv)}%`, background: "var(--brand-accent)" }} />
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-[10.5px]"><span style={{ color: "var(--text-muted)" }} className="font-bold">Derived LTV</span><span className="tabular font-extrabold">{cust.ltv != null ? inr(cust.ltv) : "—"}</span></div>
-                  <div className="mt-1 h-3.5 rounded" style={{ background: "var(--brand)" }} />
-                </div>
+                {cust.cacNew != null && cust.ltv != null && (
+                  <HCompare rows={[
+                    { label: "CAC · new customer", value: cust.cacNew, display: inr(cust.cacNew), color: "var(--brand-accent)" },
+                    { label: "Derived LTV", value: cust.ltv, display: inr(cust.ltv), color: "var(--brand)" },
+                  ]} />
+                )}
                 <p className="text-[11px] leading-4" style={{ color: "var(--text-secondary)" }}>
                   The gap between these bars is the margin of safety{ltvCacPrev != null && ltvCac < ltvCacPrev ? " — it narrowed this month" : ""}.
                 </p>
@@ -466,22 +496,12 @@ export default async function ReviewPage({ params, searchParams }: {
                 ? "Less at the cart than the chart suggests — the rate halved partly because top-of-funnel campaigns buy cheap add-to-carts by design."
                 : "Watch the cart mix — conversion after add-to-cart drifts down as top-of-funnel spend grows.")}
             <div className="rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-hairline)" }}>
-              <div className="flex items-end gap-2" style={{ height: 110 }}>
-                {cart.map((f) => {
-                  const rate = f.atcToBuy!;
-                  const h = Math.max(10, Math.round((rate / cartMax) * 92));
-                  const color = rate >= 0.13 ? "var(--brand)" : rate >= 0.09 ? "var(--brand-accent)" : "var(--status-critical)";
-                  return (
-                    <div key={f.month} className="flex flex-1 flex-col items-center justify-end gap-1">
-                      <span className="tabular text-[9.5px] font-bold" style={{ color: "var(--text-secondary)" }}>{(rate * 100).toFixed(1)}%</span>
-                      <div className="w-full rounded-t" style={{ height: h, background: color, opacity: 0.9 }} />
-                      <span className="text-[8.5px] font-bold uppercase" style={{ color: "var(--text-muted)" }}>
-                        {monthLabel(f.month.slice(0, 7)).split(" ")[0]}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              <ColumnChart cols={cart.map((f) => ({
+                label: shortMonth(f.month),
+                value: f.atcToBuy!,
+                display: `${(f.atcToBuy! * 100).toFixed(1)}%`,
+                color: f.atcToBuy! >= 0.13 ? "var(--brand)" : f.atcToBuy! >= 0.09 ? "var(--brand-accent)" : "var(--status-critical)",
+              }))} />
               <p className="mt-3 text-[11.5px] leading-5" style={{ color: "var(--text-secondary)" }}>
                 {dropped != null && <><strong className="tabular">{num(dropped)}</strong> add-to-carts didn&rsquo;t convert in {mLabel} — inflated
                 by top-of-funnel campaigns whose job is reach, not immediate checkout. </>}
@@ -497,8 +517,8 @@ export default async function ReviewPage({ params, searchParams }: {
 
       {/* ============ 04 · THE PEOPLE ============ */}
       <div className="page-break" />
+      <PageBand n="04 · The people" title="The growth hiding in the customer base." client={client.name} />
       <section className="review-block card px-6 py-6">
-        <Masthead n="04" label="The people" client={client.name} />
 
         <div className="flex flex-col gap-3">
           {qa("Question 03", "Who should we be talking to?",
@@ -508,24 +528,18 @@ export default async function ReviewPage({ params, searchParams }: {
 
           {retentionRow?.waRoas != null && paidRoas != null && (
             <div className="flex flex-col gap-2.5 rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-hairline)" }}>
-              <div>
-                <div className="flex justify-between text-[10.5px]">
-                  <span className="font-bold" style={{ color: "var(--text-muted)" }}>
-                    WhatsApp remarketing{retentionRow.waSpend != null && retentionRow.waRevenue != null ? ` · ${inrCompact(retentionRow.waSpend)} → ${inrCompact(retentionRow.waRevenue)}` : ""}
-                  </span>
-                  <span className="tabular font-extrabold" style={{ color: "var(--brand)" }}>{ratio(retentionRow.waRoas)}×</span>
-                </div>
-                <div className="mt-1 h-4 rounded" style={{ background: "var(--brand)" }} />
-              </div>
-              <div>
-                <div className="flex justify-between text-[10.5px]">
-                  <span className="font-bold" style={{ color: "var(--text-muted)" }}>Paid ads · {inrCompact(paidSpend)} → {inrCompact(paidRevenue)}</span>
-                  <span className="tabular font-extrabold">{ratio(paidRoas)}×</span>
-                </div>
-                <div className="mt-1 h-4 rounded" style={{ background: "var(--grid)" }}>
-                  <div className="h-4 rounded" style={{ width: `${Math.min(100, (100 * paidRoas) / retentionRow.waRoas)}%`, background: "var(--brand-accent)" }} />
-                </div>
-              </div>
+              <HCompare rows={[
+                {
+                  label: "WhatsApp remarketing",
+                  sub: retentionRow.waSpend != null && retentionRow.waRevenue != null ? `${inrCompact(retentionRow.waSpend)} → ${inrCompact(retentionRow.waRevenue)}` : undefined,
+                  value: retentionRow.waRoas, display: `${ratio(retentionRow.waRoas)}×`, color: "var(--brand)",
+                },
+                {
+                  label: "Paid ads",
+                  sub: `${inrCompact(paidSpend)} → ${inrCompact(paidRevenue)}`,
+                  value: paidRoas, display: `${ratio(paidRoas)}×`, color: "var(--brand-accent)",
+                },
+              ]} />
               <p className="text-[11px] leading-4" style={{ color: "var(--text-secondary)" }}>
                 A warm audience always converts better — the point is that
                 {returningShare != null ? <> <strong>{pct(returningShare, 0)} of tracked revenue already comes from returning customers</strong> and</> : null} the
@@ -536,6 +550,15 @@ export default async function ReviewPage({ params, searchParams }: {
 
           {rfm && (
             <>
+              <SegmentBar segments={rfm.segments.map((s) => ({
+                label: s.label, count: s.customers,
+                color: s.key === "champions" ? "var(--brand)"
+                  : s.key === "slipping" ? "var(--status-warning)"
+                  : s.key === "lost_regulars" ? "var(--status-critical)"
+                  : s.key === "fresh" ? "var(--series-1)"
+                  : s.key === "cooling_one" ? "var(--brand-accent)"
+                  : "var(--baseline)",
+              }))} />
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
                 {rfm.segments.map((s) => {
                   const hot = s.key === "slipping" || s.key === "lost_regulars";
@@ -595,9 +618,8 @@ export default async function ReviewPage({ params, searchParams }: {
 
       {/* ============ 05 · COMMITMENTS ============ */}
       <div className="page-break" />
+      <PageBand n="05 · Commitments" title="Next month, in writing." client={client.name} />
       <section className="review-block card px-6 py-6">
-        <Masthead n="05" label="Commitments" client={client.name} />
-        <h2 className="review-h2">Next month, in writing.</h2>
         <p className="mb-4 text-[13px] leading-6" style={{ color: "var(--text-secondary)", maxWidth: 640 }}>
           Each commitment carries an owner, a date, and the number that proves it happened.
           This exact table reopens on page 02 of next month&rsquo;s review, stamped Done, Partial or Missed.

@@ -481,6 +481,55 @@ h3 { font-weight: 700; }
 /* print-only: hidden on screen, shown on paper (editable rows print as clean tables) */
 .print-only { display: none; }
 
+/* ---- review: the client-facing dressing ----
+   Band + cover carry explicit print-color-adjust so the brand color survives
+   into the PDF even when "background graphics" is unchecked. */
+.review-band {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 14px;
+  padding: 14px 20px;
+  background: linear-gradient(120deg, #0b5f54, #108474 55%, #17b39a);
+  color: #ffffff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.review-band-title {
+  font-family: var(--font-serif), Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: #ffffff;
+}
+.review-band-no {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+}
+.review-cover {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 40px 36px 32px;
+  background:
+    radial-gradient(700px 300px at 8% -20%, rgba(23, 179, 154, 0.35), transparent 60%),
+    radial-gradient(600px 280px at 95% -30%, rgba(239, 140, 51, 0.22), transparent 58%),
+    #0d1614;
+  color: #ffffff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+@media print {
+  .review-cover { break-inside: avoid; }
+}
+
 /* ---- print: turn the review into the deck ----
    The nav is fixed-position and the app is dark-first; both fight paper.
    Force an ink-friendly light palette, drop the chrome, and break pages at
