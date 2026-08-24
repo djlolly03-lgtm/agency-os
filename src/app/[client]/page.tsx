@@ -53,14 +53,15 @@ export default async function OverviewPage({ params, searchParams }: {
 
   // ---- selection: a month (the atom) or a wider period ----
   const periodSel = sp.period ? periods.find((p) => p.key === sp.period) ?? null : null;
-  // Default to the last COMPLETE month, not the in-progress one — a day-2
-  // MTD number reads as "revenue collapsed" before you realize why. The
-  // current month stays one click away via its own chip. Completeness comes
-  // from how far the DATA reaches, not from list position: on 1 Sep with
-  // data through 31 Aug, August is complete and months[1] would wrongly
-  // still hand back July.
-  const isCompleteMonth = (m: string) => monthEndDay(m) <= asOf;
-  const defaultMonth = months.find(isCompleteMonth) ?? months[0];
+  // This is the OPERATOR's console, so it opens LIVE — the current month to
+  // date. Insights about a month that closed three weeks ago are history, not
+  // decisions: creative fatigue, hidden gems and pacing only mean anything
+  // against spend that is running right now. The client-facing /review page
+  // makes the opposite choice and opens on the last COMPLETE month, because
+  // that document is the monthly meeting.
+  // (Early in a month the MTD totals are small by definition — the hero says
+  // "data through <day>" and deltas compare the same days last month.)
+  const defaultMonth = months[0];
   const selectedMonth = !periodSel && sp.month && months.includes(sp.month + "-01")
     ? sp.month + "-01" : defaultMonth;
   const isMonthMode = !periodSel;
@@ -472,7 +473,7 @@ export default async function OverviewPage({ params, searchParams }: {
                 {periodSel
                   ? `${periodSel.longLabel}${rangeEnd === dv.asOf ? ` · data through ${dayLabel(dv.asOf)}` : ""}`
                   : isCurrent
-                    ? `Data through ${dayLabel(dv.asOf)} · synced every morning`
+                    ? `Live · data through ${dayLabel(dv.asOf)} · synced every morning`
                     : `${monthLabel(monthParam)} · complete month`}
                 {inSeasonNow.length > 0 && (
                   <>
