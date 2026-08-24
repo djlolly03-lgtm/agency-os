@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { getClientBySlug, getCreatives, getGoals, getMonths, latestDay } from "@/lib/queries";
+import { getClientBySlug, getCreatives, getGoals, getMonths, latestDay, getCustomerEconomics } from "@/lib/queries";
 import { getRfmSegments } from "@/lib/shopify";
+import { CoverageStrip } from "@/components/coverage-strip";
 import { inr, inrCompact, monthLabel, num } from "@/lib/format";
 import { MatchActions } from "./match-actions";
 import { GoalEditor } from "./goal-editor";
@@ -29,7 +30,7 @@ export default async function InternalPage({ params, searchParams }: {
     [client.id, inputMonth]);
   const manualMap = Object.fromEntries(manualRows.map((r) => [String(r.metric), Number(r.value)]));
 
-  const [creatives, assets, runs, rfm] = await Promise.all([
+  const [creatives, assets, runs, rfm, custMonths] = await Promise.all([
     getCreatives(client.id),
     db.query<{ id: string; filename: string; mime_type: string | null }>(
       `select id, filename, mime_type from creative_assets where client_id = $1 order by filename`, [client.id]),
@@ -37,6 +38,7 @@ export default async function InternalPage({ params, searchParams }: {
       `select source, ran_at::text as ran_at, rows_upserted, anomalies
        from sync_runs where client_id = $1 order by ran_at desc limit 8`, [client.id]),
     getRfmSegments(client.id),
+    getCustomerEconomics(client.id),
   ]);
 
   const month = (await latestDay(client.id)).slice(0, 7) + "-01";
@@ -68,6 +70,8 @@ export default async function InternalPage({ params, searchParams }: {
         </p>
         <ManualInputsEditor slug={slug} month={inputMonth} initial={manualMap} />
       </div>
+
+      <CoverageStrip months={custMonths} slug={slug} />
 
       <div className="card p-4">
         <h3 className="mb-1 text-sm font-semibold">Goals — {monthLabel(month.slice(0, 7))}</h3>

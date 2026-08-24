@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   getClientBySlug, getOverview, getTimeseries, getCreatives, getPacing, getDivisionOverview, getMonths,
   getFunnel, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
-  getCustomerEconomics, getMeasuredLtv, latestDay, getCampaignMonthly, getDataFreshness,
+  getCustomerEconomics, latestDay, getCampaignMonthly, getDataFreshness,
 } from "@/lib/queries";
 import { getRfmSegments } from "@/lib/shopify";
 import { getRetentionChannels } from "@/lib/retention";
@@ -11,9 +11,8 @@ import { RetentionChannels } from "@/components/retention-channels";
 import { StaleNotice } from "@/components/stale-notice";
 import { ExecSummary, EXEC_SUMMARY_COUNT } from "@/components/exec-summary";
 import { Collapsible } from "@/components/collapsible";
-import { CustomerEconomics } from "@/components/customer-economics";
+import { CustomerSnapshot } from "@/components/customer-snapshot";
 import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar } from "@/lib/seasons";
-import { SeasonRadar } from "@/components/season-radar";
 import { Funnel } from "@/components/funnel";
 import { computeInsights } from "@/lib/insights";
 import { inr, inrCompact, num, ratio, pct, dayLabel, monthLabel } from "@/lib/format";
@@ -27,7 +26,7 @@ import { FadeIn, AnimatedNumber } from "@/components/motion";
 import { InsightChips } from "@/components/insight-chips";
 import { SectionHeader } from "@/components/section-header";
 import { Explain } from "@/components/explain";
-import { HeroCinema, SpotlightStage } from "@/components/hero-cinema";
+import { HeroCinema } from "@/components/hero-cinema";
 import { GrowthStory } from "@/components/growth-story";
 import { MarginEngine } from "@/components/margin-engine";
 import { ChannelDuel } from "@/components/channel-duel";
@@ -71,7 +70,7 @@ export default async function OverviewPage({ params, searchParams }: {
   const prevMonthEnd = new Date(Date.UTC(
     Number(selectedMonth.slice(0, 4)), Number(selectedMonth.slice(5, 7)) - 1, 0)).toISOString().slice(0, 10);
 
-  const [ov, daily, weekly, monthly, creatives, pacing, dv, goalRows, nameRollups, custMonths, measuredLtv] = await Promise.all([
+  const [ov, daily, weekly, monthly, creatives, pacing, dv, goalRows, nameRollups, custMonths] = await Promise.all([
     getOverview(client.id),
     getTimeseries(client.id, "day"),
     getTimeseries(client.id, "week"),
@@ -84,7 +83,6 @@ export default async function OverviewPage({ params, searchParams }: {
     getGoals(client.id, selectedMonth),
     getMonthlyNameRollups(client.id),
     getCustomerEconomics(client.id),
-    getMeasuredLtv(client.id),
   ]);
   const [rfm, retentionMonths, campaignMonthly, freshness] = await Promise.all([
     getRfmSegments(client.id),
@@ -380,7 +378,6 @@ export default async function OverviewPage({ params, searchParams }: {
     },
   ];
 
-  const totalAllTime = series.reduce((t, s) => t + s.revenue, 0);
 
   // ---- 02 · channel duel: dynamic act title ----
   const duelBest = platformTotals.length >= 2 ? [...platformTotals].sort((a, b) => b.roas - a.roas)[0] : null;
@@ -424,24 +421,18 @@ export default async function OverviewPage({ params, searchParams }: {
           pulling the hero up would drag it over the summary's lower lines
           instead — exactly what was happening. */}
       <div>
-        <HeroCinema skyline={[]} minHeight="60vh">
-          <div className="flex min-h-[60vh] flex-col pb-10 pt-24 sm:pt-28">
-            {/* headline */}
-            <div className="mt-2 text-center sm:mt-6">
-              <h1 className="cinema-h1 text-4xl sm:text-6xl md:text-7xl">
-                <span className="line-serif hero-anim hero-reveal" style={{ animationDelay: "0.25s" }}>
-                  Fresh produce,
-                </span>
-                <span className="line-sans hero-anim hero-reveal" style={{ animationDelay: "0.42s" }}>
-                  fresher numbers.
-                </span>
-              </h1>
-              <p className="hero-anim hero-fade mx-auto mt-5 text-xs sm:text-sm"
-                style={{ animationDelay: "0.6s", color: "rgba(255,255,255,0.65)" }}>
+        <HeroCinema skyline={[]} minHeight="auto">
+          <div className="flex flex-col gap-5 pb-8 pt-24 sm:pt-28">
+            {/* No display headline here: the console's first job is the
+                moves above, and a full-width serif title pushed real content
+                below the fold for no information. Period + numbers only. */}
+            <div className="text-center">
+              <p className="hero-anim hero-fade text-xs sm:text-sm"
+                style={{ animationDelay: "0.2s", color: "rgba(255,255,255,0.7)" }}>
                 {periodSel
                   ? `${periodSel.longLabel}${rangeEnd === dv.asOf ? ` · data through ${dayLabel(dv.asOf)}` : ""}`
                   : isCurrent
-                    ? `Live · data through ${dayLabel(dv.asOf)} · synced every morning`
+                    ? `Live · data through ${dayLabel(dv.asOf)}`
                     : `${monthLabel(monthParam)} · complete month`}
                 {inSeasonNow.length > 0 && (
                   <>
@@ -459,7 +450,6 @@ export default async function OverviewPage({ params, searchParams }: {
               <PeriodPicker months={months} periods={periods} selectedKey={selectedKey} basePath={`/${slug}`} center />
             </div>
 
-            <div className="min-h-6 flex-1" />
 
             {/* the numbers */}
             <div className="hero-anim hero-fade grid gap-7 md:grid-cols-3" style={{ animationDelay: "0.85s" }}>
@@ -491,21 +481,6 @@ export default async function OverviewPage({ params, searchParams }: {
               ))}
             </div>
 
-            {/* bottom copy + CTA */}
-            <div className="mt-10 flex items-end justify-between gap-6">
-              <p className="hero-anim hero-fade hidden max-w-[280px] text-sm leading-relaxed sm:block"
-                style={{ animationDelay: "1s", color: "rgba(255,255,255,0.6)" }}>
-                Synced every morning from Meta, Google Ads and Shopify. Every number on this
-                page opens into the math behind it — click one.
-              </p>
-              <div className="hero-anim hero-fade flex flex-col items-start gap-3" style={{ animationDelay: "1.1s" }}>
-                <p className="max-w-[260px] text-xs leading-relaxed sm:text-sm"
-                  style={{ color: "rgba(255,255,255,0.6)" }}>
-                  {monthsAsc.length} months on the road — {inrCompact(totalAllTime)} in revenue and counting.
-                </p>
-                <a href="#story" className="cta-pill">Dig into the data</a>
-              </div>
-            </div>
           </div>
         </HeroCinema>
       </div>
@@ -532,7 +507,7 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== Customer engine ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader eyebrow="Customer engine" title="What a customer costs — and what one is worth"
-          meta="from client-reported monthly customer counts" scope={custScope} />
+          meta="the full story is in the Review" scope={custScope} />
       </FadeIn>
       {isMonthMode && (
         <FadeIn delay={0.05}>
@@ -541,9 +516,7 @@ export default async function OverviewPage({ params, searchParams }: {
         </FadeIn>
       )}
       <FadeIn delay={0.05}>
-        <SpotlightStage>
-          <CustomerEconomics months={custMonths} slug={slug} measuredLtv={measuredLtv} rfm={rfm} />
-        </SpotlightStage>
+        <CustomerSnapshot months={custMonths} slug={slug} rfm={rfm} />
       </FadeIn>
 
       {/* ===== INSIGHTS (scoped to selection) ===== */}
@@ -592,18 +565,6 @@ export default async function OverviewPage({ params, searchParams }: {
         <RetentionChannels rows={retentionMonths} paidRoas={mtRoas > 0 ? mtRoas : null}
           selectedMonth={selectedMonth} />
       </FadeIn>
-
-      {/* ===== Seasons ===== */}
-      <div id="seasons" style={{ scrollMarginTop: "100px" }} />
-      <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Seasons" title="Selling what nature ships"
-          meta="produce windows vs actual sales · India seasons" />
-      </FadeIn>
-      {isMonthMode && (
-        <FadeIn delay={0.05}>
-          <SeasonRadar riding={radar.riding} missed={radar.missed} offSeason={radar.offSeason} />
-        </FadeIn>
-      )}
 
       {/* ===== Conversion funnel — the single biggest block on the page, and
           Meta-only mid-funnel plumbing. Worth having, not worth a full screen

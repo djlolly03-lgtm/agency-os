@@ -539,7 +539,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         category: "Open windows",
         kind: "move",
         metric: String(missed.length),
-        text: `in-season item${missed.length > 1 ? "s" : ""} with zero spend — nature is shipping, we aren't selling. Full list in Seasons, below.`,
+        text: `in-season item${missed.length > 1 ? "s" : ""} with zero spend — nature is shipping, we aren't selling: ${missed.slice(0, 4).map((m) => m.produce.label).join(", ")}${missed.length > 4 ? ` +${missed.length - 4}` : ""}.`,
         tone: "ai",
         severity: "watch",
         action: "Launch campaigns on these in-season items before the window passes.",
@@ -550,7 +550,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
           formula: `missed = in season this month AND spend = 0 AND sold historically`,
           note: "Only items Organik Truck has sold before are flagged.",
         },
-        link: { href: `/${slug}#seasons`, label: "See the full list →" },
+        link: { href: `/${slug}/review`, label: "Season detail in the Review →" },
       });
     }
     const offSpend = offSeason.reduce((s2, x) => s2 + x.spend, 0);
