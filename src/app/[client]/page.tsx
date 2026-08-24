@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import {
   getClientBySlug, getOverview, getTimeseries, getCreatives, getPacing, getDivisionOverview, getMonths,
   getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
-  getCustomerEconomics, getMeasuredLtv,
+  getCustomerEconomics, getMeasuredLtv, latestDay, getCampaignMonthly,
 } from "@/lib/queries";
 import { getCohortRetention, getRfmSegments } from "@/lib/shopify";
 import { getRetentionChannels } from "@/lib/retention";
@@ -47,15 +47,20 @@ export default async function OverviewPage({ params, searchParams }: {
   if (!client) notFound();
 
   const months = await getMonths(client.id);          // desc
+  const asOf = await latestDay(client.id);            // cached; needed before the big fetch
   const monthsAsc = [...months].sort();
   const periods = buildPeriods(months);
 
   // ---- selection: a month (the atom) or a wider period ----
   const periodSel = sp.period ? periods.find((p) => p.key === sp.period) ?? null : null;
-  // default to the last COMPLETE month, not the in-progress one — a day-2
+  // Default to the last COMPLETE month, not the in-progress one — a day-2
   // MTD number reads as "revenue collapsed" before you realize why. The
-  // current month stays one click away via its own chip.
-  const defaultMonth = months.length > 1 ? months[1] : months[0];
+  // current month stays one click away via its own chip. Completeness comes
+  // from how far the DATA reaches, not from list position: on 1 Sep with
+  // data through 31 Aug, August is complete and months[1] would wrongly
+  // still hand back July.
+  const isCompleteMonth = (m: string) => monthEndDay(m) <= asOf;
+  const defaultMonth = months.find(isCompleteMonth) ?? months[0];
   const selectedMonth = !periodSel && sp.month && months.includes(sp.month + "-01")
     ? sp.month + "-01" : defaultMonth;
   const isMonthMode = !periodSel;
@@ -85,11 +90,20 @@ export default async function OverviewPage({ params, searchParams }: {
     getCustomerEconomics(client.id),
     getMeasuredLtv(client.id),
   ]);
-  const [cohortData, rfm, retentionMonths] = await Promise.all([
+  const [cohortData, rfm, retentionMonths, campaignMonthly] = await Promise.all([
     getCohortRetention(client.id),
     getRfmSegments(client.id),
     getRetentionChannels(client.id),
+    getCampaignMonthly(client.id),
   ]);
+  // blended per-day totals across all history — day-of-week rule
+  const blendedByDay = new Map<string, { day: string; spend: number; revenue: number; purchases: number }>();
+  for (const r of daily) {
+    const d = blendedByDay.get(r.period) ?? { day: r.period, spend: 0, revenue: 0, purchases: 0 };
+    d.spend += r.spend; d.revenue += r.revenue; d.purchases += r.purchases;
+    blendedByDay.set(r.period, d);
+  }
+  const blendedDaily = [...blendedByDay.values()].sort((a, b) => a.day.localeCompare(b.day));
 
   const rangeStart = periodSel ? periodSel.from : selectedMonth;
   const rangeEndRaw = periodSel ? periodSel.to : monthEnd;
@@ -221,6 +235,7 @@ export default async function OverviewPage({ params, searchParams }: {
       ? { closing: radar.closing, missed: radar.missed, offSeason: radar.offSeason }
       : { closing: [], missed: [], offSeason: [] },
     customerMonths: custMonths,
+    campaignMonthly, dailyAll: blendedDaily, asOf,
   });
 
   // ---- store-revenue view (matches the client's sheet mental model) ----

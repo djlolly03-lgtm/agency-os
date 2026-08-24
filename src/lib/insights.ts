@@ -17,7 +17,7 @@
  */
 import type { CreativeRollup, PacingMetric, CustomerMonth } from "./queries";
 import type { ProduceMonthAgg } from "./seasons";
-import { seasonLabel } from "./seasons";
+import { seasonLabel, classifyProduce, PRODUCE } from "./seasons";
 
 export interface InsightMathStep { label: string; value: string }
 
@@ -87,10 +87,223 @@ export interface MonthInsightInput {
   seasonal?: { closing: ProduceMonthAgg[]; missed: ProduceMonthAgg[]; offSeason: ProduceMonthAgg[] };
   /** customer economics months (only those with client data) */
   customerMonths?: CustomerMonth[];
+  /** campaign × month history — trajectory rules (saturation, platform split) */
+  campaignMonthly?: Array<{ month: string; campaign: string; platform: string; spend: number; revenue: number; purchases: number }>;
+  /** blended daily totals across all history — day-of-week efficiency */
+  dailyAll?: Array<{ day: string; spend: number; revenue: number; purchases: number }>;
+  /** latest ingested day — lets trajectory rules drop the in-progress month */
+  asOf?: string;
+}
+
+const DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const pfName = (p: string) => (p === "meta" ? "Meta" : p === "google" ? "Google" : p);
+
+/**
+ * Buyer-lever rules — the three questions a media buyer asks that a
+ * single-month snapshot structurally cannot answer:
+ *   1. which campaign have we scaled past its ceiling
+ *   2. is a product performing on the wrong platform
+ *   3. are we buying every weekday as if they convert alike
+ * Each returns spend a buyer can move this week, not an observation.
+ */
+function buyerInsights(input: MonthInsightInput): Insight[] {
+  const out: Insight[] = [];
+  const { slug, campaignMonthly = [], dailyAll = [] } = input;
+
+  // ---- A. scaled past the ceiling: spend up while ROAS falls ----
+  // Compares the FIRST half of a campaign's complete-month history against
+  // the SECOND half. A trailing 3-vs-3 window was tried first and missed the
+  // account's biggest laggard: one strong month inside the recent window
+  // averaged the decline away. Saturation is a slow curve, so the halves see
+  // it where a short window doesn't. The in-progress month is excluded —
+  // a part-month understates spend and would fake a slowdown.
+  const completeOnly = input.asOf
+    ? campaignMonthly.filter((r) => r.month.slice(0, 7) < input.asOf!.slice(0, 7))
+    : campaignMonthly;
+  if (completeOnly.length) {
+    const agg = (rows: typeof campaignMonthly) => rows.reduce(
+      (t, r) => ({ spend: t.spend + r.spend, revenue: t.revenue + r.revenue }), { spend: 0, revenue: 0 });
+    const byCampaign = new Map<string, typeof campaignMonthly>();
+    for (const r of completeOnly) {
+      const k = `${r.platform}|${r.campaign}`;
+      const list = byCampaign.get(k);
+      if (list) list.push(r); else byCampaign.set(k, [r]);
+    }
+    const monthsAsc = [...new Set(completeOnly.map((r) => r.month))].sort();
+    const lastTwo = monthsAsc.slice(-2);
+    const acct = agg(completeOnly.filter((r) => lastTwo.includes(r.month)));
+    const blended = acct.spend > 0 ? acct.revenue / acct.spend : 0;
+
+    const decayed = [...byCampaign.entries()].map(([k, rows]) => {
+      const sorted = [...rows].sort((a, b) => a.month.localeCompare(b.month));
+      const half = Math.floor(sorted.length / 2);
+      const early = agg(sorted.slice(0, half)), late = agg(sorted.slice(half));
+      const eRoas = early.spend > 0 ? early.revenue / early.spend : 0;
+      const lRoas = late.spend > 0 ? late.revenue / late.spend : 0;
+      return {
+        name: k.split("|")[1], platform: k.split("|")[0], months: sorted.length,
+        early, late, eRoas, lRoas,
+        perMonth: late.spend / Math.max(sorted.length - half, 1),
+        spendUp: early.spend > 0 ? late.spend / early.spend - 1 : 0,
+        roasDown: eRoas > 0 ? 1 - lRoas / eRoas : 0,
+      };
+    }).filter((c) =>
+      c.months >= 4 &&                  // enough history for halves to mean anything
+      c.late.spend >= 50_000 &&         // real money still flowing in
+      c.spendUp >= 0.25 &&              // we leaned in hard
+      c.roasDown >= 0.2 &&              // and it got materially worse
+      c.lRoas < blended)                // and it now drags the account
+      .sort((a, b) => b.late.spend * (blended - b.lRoas) - a.late.spend * (blended - a.lRoas));
+
+    if (decayed.length && blended > 0) {
+      const c = decayed[0];
+      const upside = c.perMonth * (blended - c.lRoas);
+      out.push({
+        icon: "trend-down",
+        category: "Scaled past the ceiling",
+        metric: `${c.lRoas.toFixed(2)}×`,
+        text: `“${truncate(c.name, 44)}” returns ${c.lRoas.toFixed(2)}× against a ${blended.toFixed(2)}× account — down from ${c.eRoas.toFixed(2)}× earlier in its life, while its budget rose ${Math.round(c.spendUp * 100)}%.`,
+        tone: "risk",
+        severity: "critical",
+        action: `Cap ${pfName(c.platform)}'s “${truncate(c.name, 30)}” and redeploy — more money has stopped buying more return.`,
+        tracesTo: `${pfName(c.platform)} daily export → spend and revenue by campaign, ${c.months} complete months`,
+        costOfInaction: `≈${compact(upside)}/month foregone versus running that budget at the account average`,
+        math: {
+          steps: [
+            { label: `Spend, first ${Math.floor(c.months / 2)} months`, value: compact(c.early.spend) },
+            { label: "ROAS then", value: `${c.eRoas.toFixed(2)}×` },
+            { label: `Spend, latest ${c.months - Math.floor(c.months / 2)} months`, value: compact(c.late.spend) },
+            { label: "ROAS now", value: `${c.lRoas.toFixed(2)}×` },
+            { label: "Account ROAS, last 2 complete months", value: `${blended.toFixed(2)}×` },
+            { label: "This campaign, per month", value: compact(c.perMonth) },
+          ],
+          formula: `upside = ${compact(c.perMonth)} × (${blended.toFixed(2)} − ${c.lRoas.toFixed(2)}) ≈ ${compact(upside)}/month`,
+          note: "Rising spend with falling return is the signature of a campaign bought past saturation — the fix is a budget cap, not new creative. Ranked by recoverable rupees, not by ROAS alone.",
+        },
+        link: { href: `/${slug}/campaigns`, label: "Open campaigns →" },
+      });
+    }
+  }
+
+  // ---- B. same product, wrong platform ----
+  if (campaignMonthly.length) {
+    const monthsAsc = [...new Set(campaignMonthly.map((r) => r.month))].sort();
+    const window = monthsAsc.slice(-2);
+    const byKey = new Map<string, { spend: number; revenue: number }>();
+    // campaigns that deliberately span the catalogue can't be attributed to
+    // one product line — comparing them platform-to-platform is meaningless
+    const MIXED = /all fruits|performance max|pmax|only feed|app promotion/i;
+    const LINES: Array<[string, RegExp]> = [
+      ["Vegetables", /\bveg(gies|etables?)\b/i],
+      ["Groceries", /\bgrocer/i],
+    ];
+    for (const r of campaignMonthly.filter((x) => window.includes(x.month))) {
+      if (MIXED.test(r.campaign)) continue;
+      const produce = classifyProduce(r.campaign, null);
+      const line = produce ? null : LINES.find(([, re]) => re.test(r.campaign));
+      if (!produce && !line) continue;
+      const k = `${produce ? produce.key : line![0]}|${r.platform}`;
+      const cur = byKey.get(k) ?? { spend: 0, revenue: 0 };
+      cur.spend += r.spend; cur.revenue += r.revenue;
+      byKey.set(k, cur);
+    }
+    const byProduce = new Map<string, Array<{ platform: string; spend: number; roas: number }>>();
+    for (const [k, v] of byKey) {
+      if (v.spend < 8000) continue;                    // both sides need real money
+      const [pk, platform] = k.split("|");
+      const list = byProduce.get(pk) ?? [];
+      list.push({ platform, spend: v.spend, roas: v.revenue / v.spend });
+      byProduce.set(pk, list);
+    }
+    const splits = [...byProduce.entries()]
+      .filter(([, l]) => l.length === 2)
+      .map(([pk, l]) => {
+        const [hi, lo] = [...l].sort((a, b) => b.roas - a.roas);
+        return { pk, hi, lo, gap: lo.roas > 0 ? hi.roas / lo.roas - 1 : Infinity };
+      })
+      .filter((s) => s.gap >= 0.6)
+      .sort((a, b) => b.lo.spend - a.lo.spend);
+
+    if (splits.length) {
+      const s = splits[0];
+      const label = PRODUCE.find((p) => p.key === s.pk)?.label ?? s.pk;
+      const googleWins = s.hi.platform === "google";
+      const upside = s.lo.spend * (s.hi.roas - s.lo.roas);
+      out.push({
+        icon: "zap",
+        category: "Same product, wrong platform",
+        metric: `${s.hi.roas.toFixed(2)}× vs ${s.lo.roas.toFixed(2)}×`,
+        text: `${label} returns ${s.hi.roas.toFixed(2)}× on ${pfName(s.hi.platform)} but only ${s.lo.roas.toFixed(2)}× on ${pfName(s.lo.platform)} — same product, same weeks.`,
+        tone: "warn",
+        severity: s.lo.roas < 1 ? "critical" : "watch",
+        action: `Move the ${label} budget from ${pfName(s.lo.platform)} to ${pfName(s.hi.platform)}, where the same demand is already converting.`,
+        tracesTo: "Campaign names matched to the produce calendar, split by platform · last 2 months",
+        costOfInaction: `≈${compact(upside)} of revenue the same budget would have earned on ${pfName(s.hi.platform)}`,
+        math: {
+          steps: [
+            { label: `${pfName(s.hi.platform)} spend`, value: compact(s.hi.spend) },
+            { label: `${pfName(s.hi.platform)} ROAS`, value: `${s.hi.roas.toFixed(2)}×` },
+            { label: `${pfName(s.lo.platform)} spend`, value: compact(s.lo.spend) },
+            { label: `${pfName(s.lo.platform)} ROAS`, value: `${s.lo.roas.toFixed(2)}×` },
+          ],
+          formula: `upside = ${compact(s.lo.spend)} × (${s.hi.roas.toFixed(2)} − ${s.lo.roas.toFixed(2)}) ≈ ${compact(upside)}`,
+          note: `Both sides carry real spend, so this is a platform-fit read rather than a small-sample artefact. Platforms self-attribute — treat the gap directionally, act on its size.${googleWins ? " Part of Google's edge here is brand search, so expect the realised lift to land under the headline gap." : ""}`,
+        },
+        link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
+      });
+    }
+  }
+
+  // ---- C. buying every weekday alike ----
+  if (dailyAll.length >= 60) {
+    const recent = dailyAll.slice(-120);
+    const buckets = Array.from({ length: 7 }, () => ({ spend: 0, revenue: 0, purchases: 0 }));
+    for (const d of recent) {
+      const idx = new Date(d.day + "T00:00:00Z").getUTCDay();
+      buckets[idx].spend += d.spend; buckets[idx].revenue += d.revenue; buckets[idx].purchases += d.purchases;
+    }
+    const days = buckets.map((b, i) => ({
+      name: DOW_NAMES[i], ...b, roas: b.spend > 0 ? b.revenue / b.spend : 0,
+    })).filter((d) => d.spend > 0);
+    if (days.length === 7) {
+      const sorted = [...days].sort((a, b) => b.roas - a.roas);
+      const best = sorted[0], worst = sorted[sorted.length - 1];
+      const gap = worst.roas > 0 ? best.roas / worst.roas - 1 : 0;
+      const spendSpread = Math.max(...days.map((d) => d.spend)) / Math.max(Math.min(...days.map((d) => d.spend)), 1) - 1;
+      // only worth saying when the return gap is real AND spend is roughly flat
+      // — if budget already follows the good days there is nothing to move
+      if (gap >= 0.15 && spendSpread < 0.35) {
+        const bottom3 = sorted.slice(-3);
+        const moveable = bottom3.reduce((s, d) => s + d.spend, 0) * 0.15;
+        const upside = moveable * (best.roas - worst.roas);
+        out.push({
+          icon: "target",
+          category: "Weekday buying",
+          metric: `${Math.round(gap * 100)}%`,
+          text: `${best.name}s return ${best.roas.toFixed(2)}× and ${worst.name}s ${worst.roas.toFixed(2)}× — yet spend is within ${Math.round(spendSpread * 100)}% across every day of the week.`,
+          tone: "warn",
+          severity: "watch",
+          action: `Shift 15% of ${bottom3.map((d) => d.name.slice(0, 3)).join("/")} budget into ${sorted.slice(0, 2).map((d) => d.name.slice(0, 3)).join("/")} — a bid-schedule change, no new campaign needed.`,
+          tracesTo: "Blended daily spend and revenue, trailing 120 days, grouped by day of week",
+          costOfInaction: `≈${compact(upside)}/month left on the table by buying every weekday at the same weight`,
+          math: {
+            steps: sorted.map((d) => ({ label: `${d.name} · ${compact(d.spend)} spend`, value: `${d.roas.toFixed(2)}×` })),
+            formula: `gap = ${best.roas.toFixed(2)} ÷ ${worst.roas.toFixed(2)} − 1 = ${Math.round(gap * 100)}%`,
+            note: "Order date, not delivery date — some of this is genuine weekly demand rhythm rather than media efficiency. Run it for two weeks before committing the budget.",
+          },
+          link: { href: `/${slug}/campaigns`, label: "Open campaigns →" },
+        });
+      }
+    }
+  }
+
+  return out;
 }
 
 export function computeInsights(input: MonthInsightInput): Insight[] {
-  const out: Insight[] = [];
+  // Buyer-lever rules lead: within a severity tier they rank ahead of the
+  // generic observations because each one names a specific budget to move.
+  const out: Insight[] = [...buyerInsights(input)];
   const { slug, monthLabel, isCurrentMonth, monthParam, monthDaily, platformTotals, adRollups } = input;
 
   // month baseline over Meta ads
@@ -375,7 +588,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     });
   }
 
-  return out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]).slice(0, 8);
+  return out.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]).slice(0, 10);
 }
 
 /** Operational "act now" insights — only meaningful for the current month. */

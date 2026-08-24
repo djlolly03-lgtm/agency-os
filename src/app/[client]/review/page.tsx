@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  getClientBySlug, getMonths, getMonthlyReport, getCustomerEconomics, getCreatives,
+  getClientBySlug, getMonths, latestDay, getMonthlyReport, getCustomerEconomics, getCreatives,
   getMonthlyNameRollups, getAdRangeRollups, getTimeseries, getGoals, getFunnelMonthly,
-  getReviewNotes, REVIEW_SECTIONS,
+  getReviewNotes, getCampaignMonthly, REVIEW_SECTIONS,
 } from "@/lib/queries";
 import { getRfmSegments, getCohortHorizons } from "@/lib/shopify";
 import { CohortHorizons } from "@/components/cohort-horizons";
@@ -64,7 +64,14 @@ export default async function ReviewPage({ params, searchParams }: {
   if (!client) notFound();
 
   const months = await getMonths(client.id);                 // desc
-  const defaultMonth = months.length > 1 ? months[1] : months[0];
+  const asOf = await latestDay(client.id);
+  // "Last complete month" must be derived from how far the DATA reaches, not
+  // from position in the list. Picking months[1] only looks right while the
+  // current month is mid-flight: on 1 Sep, with data through 31 Aug, August
+  // is complete and is the month the meeting is about — but months[1] would
+  // still hand back July.
+  const isComplete = (m: string) => monthEndDay(m) <= asOf;
+  const defaultMonth = months.find(isComplete) ?? months[0];
   const month = sp.month && months.includes(sp.month + "-01") ? sp.month + "-01" : defaultMonth;
   const mLabel = monthLabel(month.slice(0, 7));
   const monthEnd = monthEndDay(month);
@@ -73,7 +80,7 @@ export default async function ReviewPage({ params, searchParams }: {
   const prevLabel = monthLabel(prevMonth.slice(0, 7));
 
   const [report, custMonths, rfm, nameRollups, adRollups, daily, goalRows, retention,
-    funnelMonthly, notes, prevNotes, cohortHorizons, creatives] = await Promise.all([
+    funnelMonthly, notes, prevNotes, cohortHorizons, creatives, campaignMonthly] = await Promise.all([
     getMonthlyReport(client.id),
     getCustomerEconomics(client.id),
     getRfmSegments(client.id),
@@ -87,14 +94,14 @@ export default async function ReviewPage({ params, searchParams }: {
     getReviewNotes(client.id, prevMonth),
     getCohortHorizons(client.id),
     getCreatives(client.id),
+    getCampaignMonthly(client.id),
   ]);
 
   const row = report.find((r) => r.month === month);
   const prevRow = report.find((r) => r.month === prevMonth);
   if (!row) notFound();
-  // the newest month with data is (almost always) still in progress — its
-  // review reads like a 36% collapse until you notice it's a half month
-  const isPartial = month === months[0];
+  // partial = the data has not yet reached this month's final day
+  const isPartial = !isComplete(month);
 
   // ---- headline economics ----
   const paidSpend = row.meta.spend + row.google.spend;
@@ -123,6 +130,15 @@ export default async function ReviewPage({ params, searchParams }: {
     d.spend += r.spend; d.purchases += r.purchases; d.revenue += r.revenue;
     byDay.set(r.period, d);
   }
+  // blended per-day totals across all history — day-of-week rule
+  const blendedByDay = new Map<string, { day: string; spend: number; revenue: number; purchases: number }>();
+  for (const r of daily) {
+    const d = blendedByDay.get(r.period) ?? { day: r.period, spend: 0, revenue: 0, purchases: 0 };
+    d.spend += r.spend; d.revenue += r.revenue; d.purchases += r.purchases;
+    blendedByDay.set(r.period, d);
+  }
+  const blendedDaily = [...blendedByDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+
   const platformTotals = [
     { platform: "meta", spend: row.meta.spend, revenue: row.meta.revenue, roas: row.meta.spend > 0 ? row.meta.revenue / row.meta.spend : 0 },
     { platform: "google", spend: row.google.spend, revenue: row.google.revenue, roas: row.google.spend > 0 ? row.google.revenue / row.google.spend : 0 },
@@ -132,8 +148,11 @@ export default async function ReviewPage({ params, searchParams }: {
     monthDaily: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)),
     platformTotals, adRollups, goal, monthRevenue: paidRevenue,
     seasonal: undefined, customerMonths: custMonths,
+    campaignMonthly, dailyAll: blendedDaily, asOf,
   });
-  const calls = insights.filter((i) => i.action).slice(0, 3);
+  // a decision memo can carry more than three calls — these are the
+  // month's whole argument, and each one names a budget to move
+  const calls = insights.filter((i) => i.action).slice(0, 5);
 
   // ---- verdict sentence, assembled from graded facts ----
   const verb = revDelta == null ? "closed at"
@@ -278,7 +297,7 @@ export default async function ReviewPage({ params, searchParams }: {
         </h1>
         <p className="mt-3 text-[13px] leading-6" style={{ color: "rgba(255,255,255,0.72)", maxWidth: 560 }}>
           {calls.filter((c) => c.severity === "critical").length > 0
-            ? `${calls.filter((c) => c.severity === "critical").length} of the calls inside can't wait. `
+            ? `${calls.filter((c) => c.severity === "critical").length} of the ${calls.length} calls inside can't wait. `
             : "Nothing inside is on fire. "}
           Everything else in this document is evidence, in the order the decisions need it.
         </p>

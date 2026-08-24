@@ -577,6 +577,26 @@ export async function getFunnel(clientId: string, range: Range, filter?: {
 }
 
 /**
+ * Campaign × month rollup — the trajectory view. Feeds the saturation rule
+ * (spend climbing while ROAS falls) and the cross-platform product rule,
+ * neither of which a single-month snapshot can see.
+ */
+export async function getCampaignMonthly(clientId: string) {
+  const db = await getDb();
+  const rows = await db.query(
+    `select to_char(date_trunc('month', u.day), 'YYYY-MM-01') as month,
+            ca.name, u.platform,
+            sum(u.spend) spend, sum(u.revenue) revenue, sum(u.purchases) purchases
+     from unified_daily u join campaigns ca on ca.id = u.campaign_id
+     where u.client_id = $1
+     group by 1, 2, 3 order by 1`, [clientId]);
+  return rows.map((r) => ({
+    month: String(r.month), campaign: String(r.name), platform: String(r.platform),
+    spend: N(r.spend), revenue: N(r.revenue), purchases: N(r.purchases),
+  }));
+}
+
+/**
  * Monthly funnel-event rollup (Meta ad-level facts) — feeds the review's
  * cart-decay chart: add-to-cart → purchase rate by month.
  */
