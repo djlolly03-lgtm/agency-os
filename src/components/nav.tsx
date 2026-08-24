@@ -6,16 +6,19 @@ import { usePathname } from "next/navigation";
 /** Primary nav — floating glass pill with a solid active segment. */
 export function Nav({ slug, items }: {
   slug: string;
-  items: Array<{ href: string; label: string }>;
+  /** `also` lets one tab own several routes — Library covers creatives
+   *  and campaigns, so drilling into either keeps the tab lit. */
+  items: Array<{ href: string; label: string; also?: string[] }>;
 }) {
   const pathname = usePathname();
   return (
     <nav className="glass-pill max-w-full overflow-x-auto text-sm" style={{ scrollbarWidth: "none" }}>
       {items.map((n) => {
         const full = `/${slug}${n.href}`;
+        const owned = [n.href, ...(n.also ?? [])];
         const active = n.href === ""
           ? pathname === `/${slug}`
-          : pathname.startsWith(full);
+          : owned.some((h) => pathname.startsWith(`/${slug}${h}`));
         return (
           <Link
             key={n.href}

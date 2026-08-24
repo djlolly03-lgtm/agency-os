@@ -29,16 +29,12 @@ export function CreativeConcentration({ rows, topShare }: { rows: ConcentrationR
       <div className="flex flex-col gap-2">
         <svg viewBox="0 0 680 26" style={{ width: "100%", height: "auto", display: "block" }} role="img"
           aria-label="Spend share by creative">
-          {(() => {
-            let acc = 0;
-            return rows.map((r, i) => {
-              const w = r.share * 680;
-              const el = <rect key={r.name} x={acc} y="0" width={Math.max(w - 1.5, 1)} height="26" rx="3"
-                style={{ fill: r.isTail ? "var(--baseline)" : BAR_COLORS[i % BAR_COLORS.length] }} />;
-              acc += w;
-              return el;
-            });
-          })()}
+          {rows.map((r, i) => {
+            const before = rows.slice(0, i).reduce((t, x) => t + x.share, 0);
+            return <rect key={r.name} x={before * 680} y="0"
+              width={Math.max(r.share * 680 - 1.5, 1)} height="26" rx="3"
+              style={{ fill: r.isTail ? "var(--baseline)" : BAR_COLORS[i % BAR_COLORS.length] }} />;
+          })}
         </svg>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {rows.map((r, i) => (

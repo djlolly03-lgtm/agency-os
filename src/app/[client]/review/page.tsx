@@ -20,7 +20,7 @@ import { PrintButton } from "@/components/print-button";
 import { CommitmentsEditor, CommitmentCheckins } from "@/components/commitments";
 import { parseCommitments } from "@/lib/commitments";
 import { monthEndDay, shortMonth } from "@/lib/periods";
-import { RevenueTrend, Donut, Waterfall, HCompare, ColumnChart, SegmentBar } from "@/components/review-charts";
+import { RevenueTrend, Waterfall, HCompare, ColumnChart, SegmentBar } from "@/components/review-charts";
 
 /**
  * The monthly review as a DECISION MEMO — not a stats report. Structure:
@@ -450,18 +450,22 @@ export default async function ReviewPage({ params, searchParams }: {
         {/* the month, reconciled */}
         <div className="mt-6 flex flex-col gap-2">
           <div className="text-[11px] font-extrabold uppercase tracking-[0.16em]">The month, reconciled</div>
+          {/* One stacked bar, not a donut: same composition, reads left-to-right
+              like every other bar in the document, and survives print without
+              relying on background graphics. */}
           {totalRevenue > 0 && (
             <div className="mb-2 rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-hairline)" }}>
-              <Donut
-                centerLabel={inrCompact(totalRevenue)}
-                centerSub="revenue"
-                slices={[
-                  { label: "Meta Ads", value: row.meta.revenue, color: "var(--series-1)", sub: `${ratio(row.meta.spend > 0 ? row.meta.revenue / row.meta.spend : 0)}× ROAS` },
-                  { label: "Google Ads", value: row.google.revenue, color: "var(--series-2)", sub: `${ratio(row.google.spend > 0 ? row.google.revenue / row.google.spend : 0)}× ROAS` },
-                  ...(row.organicRevenue != null && row.organicRevenue > 0
-                    ? [{ label: "Direct / organic", value: row.organicRevenue, color: "var(--series-3)", sub: "no ad spend" }]
-                    : []),
-                ]} />
+              <SegmentBar segments={[
+                { label: "Meta Ads", count: Math.round(row.meta.revenue), color: "var(--series-1)" },
+                { label: "Google Ads", count: Math.round(row.google.revenue), color: "var(--series-2)" },
+                ...(row.organicRevenue != null && row.organicRevenue > 0
+                  ? [{ label: "Direct / organic", count: Math.round(row.organicRevenue), color: "var(--series-3)" }]
+                  : []),
+              ]} />
+              <p className="mt-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                {inrCompact(totalRevenue)} total · Meta {ratio(row.meta.spend > 0 ? row.meta.revenue / row.meta.spend : 0)}× ·
+                Google {ratio(row.google.spend > 0 ? row.google.revenue / row.google.spend : 0)}× · organic carries no ad spend
+              </p>
             </div>
           )}
           <table className="review-table">

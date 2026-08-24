@@ -127,6 +127,18 @@ and how much effort it takes. Priority order.
 - **Unlocks:** truer repeat numbers everywhere the customer engine reads, and those
   823 orders join the win-back universe instead of being unreachable.
 
+### 17. Refresh the Shopify extract + monthly counts on the same cadence as ads — ⏰ BLOCKING LIVE VIEW
+- **Why:** the dashboard runs on two clocks. Meta/Google sync nightly and are current
+  (23 Aug); the Shopify order export and the monthly new/returning counts are pasted by
+  hand and stop at **31 Jul** — 24 days behind. Everything customer-side (Customer Engine,
+  Cohorts, RFM, win-back queue, measured LTV, new-vs-returning revenue split) therefore
+  cannot move to the current month, which reads as a broken month-picker rather than a
+  data gap. The dashboard now labels this explicitly, but the labels are a workaround.
+- **How:** refresh the "5.Shopify Extract" tab weekly rather than monthly (same export,
+  just more often), and enter the month's new/returning counts as soon as the month closes.
+- **Unlocks:** genuinely live customer economics — the win-back queue built on data from
+  three weeks ago is already missing the customers who lapsed since.
+
 ---
 
 ## P4 — Validation

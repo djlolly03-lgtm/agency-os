@@ -249,7 +249,7 @@ function buyerInsights(input: MonthInsightInput): Insight[] {
           formula: `upside = ${compact(s.lo.spend)} × (${s.hi.roas.toFixed(2)} − ${s.lo.roas.toFixed(2)}) ≈ ${compact(upside)}`,
           note: `Both sides carry real spend, so this is a platform-fit read rather than a small-sample artefact. Platforms self-attribute — treat the gap directionally, act on its size.${googleWins ? " Part of Google's edge here is brand search, so expect the realised lift to land under the headline gap." : ""}`,
         },
-        link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
+        link: { href: `/${slug}#channels`, label: "Platform comparison →" },
       });
     }
   }
@@ -419,7 +419,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
             : `gap = ${meta.roas.toFixed(2)} ÷ ${google.roas.toFixed(2)} − 1 = +${pctGap}%`,
           note: "Each platform self-attributes — treat cross-platform comparison directionally. Google's ROAS also carries brand-search cannibalization: people already searching for Organik Truck would mostly have converted anyway, which flatters its return vs Meta's colder audiences.",
         },
-        link: { href: `/${slug}/platforms`, label: "Platform comparison →" },
+        link: { href: `/${slug}#channels`, label: "Platform comparison →" },
       });
     }
   }

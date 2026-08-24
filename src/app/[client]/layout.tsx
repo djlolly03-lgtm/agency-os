@@ -4,14 +4,18 @@ import { getDb } from "@/lib/db";
 import { Nav } from "@/components/nav";
 import { SyncChip } from "@/components/sync-chip";
 
+/**
+ * Four tabs, one job each: what needs me now, the client document, the
+ * drill-down library, and the plumbing. Platforms was cut (it duplicated
+ * the Overview's channel comparison on a near-empty page); the monthly
+ * table stays reachable from the Explain panels that link to it, just not
+ * as a top-level destination.
+ */
 const NAV = [
-  { href: "", label: "Overview" },
-  { href: "/creatives", label: "Creatives" },
-  { href: "/campaigns", label: "Campaigns" },
-  { href: "/platforms", label: "Platforms" },
-  { href: "/monthly", label: "Monthly report" },
+  { href: "", label: "Today" },
   { href: "/review", label: "Review" },
-  { href: "/internal", label: "Internal" },
+  { href: "/creatives", label: "Library", also: ["/campaigns", "/monthly", "/divisions"] },
+  { href: "/internal", label: "Setup" },
 ];
 
 export default async function ClientLayout({

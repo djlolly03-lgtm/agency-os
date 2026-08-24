@@ -51,58 +51,6 @@ export function RevenueTrend({ points, selected }: {
   );
 }
 
-/** Donut of revenue share by channel, legend beside it. */
-export function Donut({ slices, centerLabel, centerSub }: {
-  slices: Array<{ label: string; value: number; color: string; sub?: string }>;
-  centerLabel: string;
-  centerSub?: string;
-}) {
-  const total = slices.reduce((s, x) => s + x.value, 0);
-  if (total <= 0) return null;
-  const R = 44, C = 2 * Math.PI * R;
-  let acc = 0;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-      <svg viewBox="0 0 120 120" style={{ width: 132, height: 132, flexShrink: 0 }} role="img"
-        aria-label="Revenue share by channel">
-        <g transform="rotate(-90 60 60)">
-          {slices.map((s) => {
-            const len = (s.value / total) * C;
-            const el = (
-              <circle key={s.label} cx="60" cy="60" r={R} fill="none"
-                stroke={s.color} strokeWidth="20"
-                strokeDasharray={`${Math.max(len - 1.5, 0.01)} ${C - Math.max(len - 1.5, 0.01)}`}
-                strokeDashoffset={-acc} />
-            );
-            acc += len;
-            return el;
-          })}
-        </g>
-        <text x="60" y="58" textAnchor="middle" fontSize="15" fontWeight="800" style={{ ...TXT, fill: "var(--text-primary)" }}>
-          {centerLabel}
-        </text>
-        {centerSub && (
-          <text x="60" y="72" textAnchor="middle" fontSize="7.5" fontWeight="700" style={{ ...TXT, fill: "var(--text-muted)" }}>
-            {centerSub.toUpperCase()}
-          </text>
-        )}
-      </svg>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {slices.map((s) => (
-          <div key={s.label} style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0, transform: "translateY(1px)" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>{s.label}</span>
-            <span className="tabular" style={{ fontSize: 11.5, fontWeight: 800, color: "var(--text-primary)" }}>
-              {pctShort(s.value / total)}
-            </span>
-            {s.sub && <span className="tabular" style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{s.sub}</span>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** Proper waterfall: start column, floating deltas, end column. */
 export function Waterfall({ start, steps, end }: {
   start: { label: string; value: number };
@@ -235,15 +183,14 @@ export function SegmentBar({ segments }: {
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <svg viewBox="0 0 680 26" style={{ width: "100%", height: "auto", display: "block" }} role="img"
         aria-label="Customer base by segment">
-        {(() => {
-          let acc = 0;
-          return segments.map((s) => {
-            const w = (s.count / total) * 680;
-            const el = <rect key={s.label} x={acc} y="0" width={Math.max(w - 1.5, 1)} height="26" rx="3" style={{ fill: s.color }} />;
-            acc += w;
-            return el;
-          });
-        })()}
+        {segments.map((s, i) => {
+          // offset = sum of everything before it; computed, never accumulated
+          // mid-render (that trips the React compiler's immutability rule)
+          const before = segments.slice(0, i).reduce((t, x) => t + x.count, 0);
+          const w = (s.count / total) * 680;
+          return <rect key={s.label} x={(before / total) * 680} y="0"
+            width={Math.max(w - 1.5, 1)} height="26" rx="3" style={{ fill: s.color }} />;
+        })}
       </svg>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px" }}>
         {segments.map((s) => (
