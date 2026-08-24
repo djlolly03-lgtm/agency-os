@@ -80,7 +80,8 @@ export function ExecSummary({ insights, periodLabel, clientName }: {
               <AnimatePresence initial={false}>
                 {isOpen && (
                   <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.28, ease: [0.21, 0.65, 0.36, 1] }}>
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.28, ease: [0.21, 0.65, 0.36, 1] }}
+                    style={{ overflow: "hidden" }}>
                     <div className="mx-1 mb-1 mt-2 flex flex-col gap-3.5 rounded-xl border p-4"
                       style={{ borderColor: "var(--border-hairline)", background: "var(--page)" }}>
 
