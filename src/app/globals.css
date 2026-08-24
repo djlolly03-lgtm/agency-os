@@ -192,7 +192,8 @@ h3 { font-weight: 700; }
 .act-title {
   font-family: var(--font-serif), Georgia, serif;
   font-style: italic;
-  font-size: clamp(1.45rem, 2.6vw, 1.9rem);
+  /* −15%: at the old size the italic serif competed with the chart under it */
+  font-size: clamp(1.23rem, 2.21vw, 1.62rem);
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.15;
@@ -230,14 +231,23 @@ h3 { font-weight: 700; }
   --grid: #232b26;
   --baseline: #2f3833;
   --border-hairline: rgba(255, 255, 255, 0.08);
+  /* charcoal ground (#1e1e1e) instead of near-black — the old panel sat so
+     dark that mid-value heatmap cells and grid lines disappeared into it */
   background:
-    radial-gradient(900px 300px at 12% -20%, rgba(23, 179, 154, 0.18), transparent 55%),
-    radial-gradient(700px 260px at 90% 120%, rgba(239, 140, 51, 0.10), transparent 55%),
-    linear-gradient(180deg, #101613, #0c110f);
+    radial-gradient(900px 300px at 12% -20%, rgba(23, 179, 154, 0.14), transparent 55%),
+    radial-gradient(700px 260px at 90% 120%, rgba(239, 140, 51, 0.08), transparent 55%),
+    #1e1e1e;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 20px;
   color: var(--text-primary);
   box-shadow: var(--shadow-card);
+}
+/* on the charcoal ground these need to lift a step to stay legible */
+.canvas-dark {
+  --text-muted: #a0a0a0;
+  --grid: rgba(255, 255, 255, 0.1);
+  --baseline: rgba(255, 255, 255, 0.16);
+  --border-hairline: rgba(255, 255, 255, 0.1);
 }
 
 /* ---- chunky animated segment bars ---- */

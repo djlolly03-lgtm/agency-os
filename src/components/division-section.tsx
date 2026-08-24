@@ -18,7 +18,7 @@ export function OnlineOfflineCard({ month, online, onlineIsTracked, offline, hre
 }) {
   const total = online + (offline ?? 0);
   return (
-    <Link href={href} className="card card-lift block p-4">
+    <Link href={href} className="card card-lift block p-7 pb-8">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold">Online vs offline sales — {monthLabel(month.slice(0, 7))}</h3>
         <span className="text-xs underline" style={{ color: "var(--text-muted)" }}>monthly report →</span>
@@ -76,7 +76,7 @@ export function DivisionCards({ divisions, slug, month, isPartial }: {
   return (
     <div className="flex flex-col gap-3">
       {/* split bar */}
-      <div className="card p-4">
+      <div className="card p-7 pb-8">
         <h3 className="mb-3 text-sm font-semibold">Division split ({periodLabel})</h3>
         <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Spend</div>
         <SegmentBar segments={divisions.map((d) => ({
@@ -100,7 +100,7 @@ export function DivisionCards({ divisions, slug, month, isPartial }: {
       <div className="grid gap-3 md:grid-cols-2">
         {divisions.map((d) => (
           <Link key={d.division} href={`/${slug}/divisions/${d.division}?month=${monthParam}`}
-            className="card card-lift block p-4">
+            className="card card-lift block p-7 pb-8">
             <div className="mb-3 flex items-center gap-2">
               <span className="h-3 w-3 rounded-sm" aria-hidden style={{ background: DIVISION_COLOR[d.division] }} />
               <h3 className="text-sm font-semibold">{DIVISION_LABEL[d.division]}</h3>

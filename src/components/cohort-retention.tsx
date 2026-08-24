@@ -135,7 +135,7 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
                       if (offset === 0) {
                         return (
                           <td key={m} className="rounded-md text-center tabular"
-                            style={{ background: "var(--surface-2)", minWidth: 54, height: 36 }}
+                            style={{ background: "var(--surface-2)", border: "1px solid #333333", minWidth: 54, height: 36 }}
                             title={`${shortMonth(c.cohortMonth)}: ${num(c.size)} first-time buyers signed up this month`} />
                         );
                       }
@@ -143,7 +143,10 @@ export function CohortRetention({ cohorts, maxOffset }: { cohorts: CohortRow[]; 
                       const revenue = c.revenue[offset];
                       return (
                         <td key={m} className="rounded-md text-center tabular"
-                          style={{ background: `color-mix(in srgb, ${tierColor(frac)} ${tierAlpha(frac)}%, var(--surface-1))`, minWidth: 54, height: 36 }}
+                          style={{
+                            background: `color-mix(in srgb, ${tierColor(frac)} ${tierAlpha(frac)}%, var(--surface-1))`,
+                            border: "1px solid #333333", minWidth: 54, height: 36,
+                          }}
                           title={`${shortMonth(c.cohortMonth)} cohort, in ${shortMonth(m)}: ${num(retained)} of ${num(c.size)} bought again (${pct(frac)}) · ${inrCompact(revenue ?? 0)} revenue`}>
                           <span className="text-[13px] font-bold" style={{ color: "#ffffff", textShadow: "0 1px 2px rgba(0,0,0,0.35)" }}>
                             {pct(frac, 0)}

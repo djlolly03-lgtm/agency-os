@@ -236,6 +236,96 @@ export interface WinbackCustomer {
   lastOrder: string;            // YYYY-MM-DD
 }
 
+// ---------- cohort retention by day-horizon ----------
+
+export interface CohortHorizon {
+  month: string;                    // acquisition month, YYYY-MM-01
+  size: number;                     // customers first acquired that month
+  /** true for the FIRST cohort only: the order export starts there, so it
+   *  sweeps in customers who were already loyal before we could see them.
+   *  Its retention reads high for a reason that has nothing to do with
+   *  acquisition quality — never include it in a trend. */
+  censored: boolean;
+  /** share who ordered again within N days of their FIRST order (0–1).
+   *  null = the cohort hasn't aged into that horizon yet — the UI must
+   *  render that as "—", never as 0. */
+  r30: number | null;
+  r60: number | null;
+  r90: number | null;
+  r180: number | null;
+}
+
+const HORIZONS = [30, 60, 90, 180] as const;
+
+/**
+ * Repeat rate by acquisition month at 30/60/90/180 days — measured from
+ * each customer's own first-order date, so every cohort is compared on
+ * equal footing (unlike a calendar-month grid, where a customer acquired
+ * on the 29th has two days to "repeat in month 0").
+ *
+ * Computed from order history, NOT from a maintained sheet tab: the data
+ * is already here and a derived number can't drift from its source.
+ */
+export async function getCohortHorizons(clientId: string): Promise<CohortHorizon[] | null> {
+  const db = await getDb();
+  const rows = await db.query<{ customer_key: string; day: string }>(
+    `select customer_key, day::text as day from shopify_orders where client_id = $1`, [clientId]);
+  if (!rows.length) return null;
+
+  const orders = new Map<string, string[]>();
+  let latest = "0000-00-00";
+  for (const r of rows) {
+    if (r.day > latest) latest = r.day;
+    const list = orders.get(r.customer_key);
+    if (list) list.push(r.day); else orders.set(r.customer_key, [r.day]);
+  }
+  const latestMs = Date.parse(latest + "T00:00:00Z");
+  const day = 86400000;
+
+  const byMonth = new Map<string, { size: number; hits: number[]; ripe: boolean[] }>();
+  for (const [, days] of orders) {
+    days.sort();
+    const first = days[0];
+    const firstMs = Date.parse(first + "T00:00:00Z");
+    const month = first.slice(0, 8) + "01";
+    const slot = byMonth.get(month) ?? { size: 0, hits: [0, 0, 0, 0], ripe: [true, true, true, true] };
+    slot.size += 1;
+    HORIZONS.forEach((h, i) => {
+      // the cohort only counts toward a horizon once every member has had
+      // the full window — otherwise recent cohorts look artificially bad
+      if (firstMs + h * day > latestMs) slot.ripe[i] = false;
+      if (days.some((d) => {
+        const ms = Date.parse(d + "T00:00:00Z");
+        return ms > firstMs && ms <= firstMs + h * day;
+      })) slot.hits[i] += 1;
+    });
+    byMonth.set(month, slot);
+  }
+
+  return [...byMonth.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, s], i) => ({
+    month, size: s.size, censored: i === 0,
+    r30: s.ripe[0] ? s.hits[0] / s.size : null,
+    r60: s.ripe[1] ? s.hits[1] / s.size : null,
+    r90: s.ripe[2] ? s.hits[2] / s.size : null,
+    r180: s.ripe[3] ? s.hits[3] / s.size : null,
+  }));
+}
+
+// ---------- win-back queue ----------
+
+export interface WinbackSegment {
+  key: RfmSegmentKey;
+  label: string;
+  count: number;
+  historicValue: number;      // lifetime revenue sitting in the segment
+  rule: string;               // the filter, in words a buyer can audit
+  treatment: string;          // the prescribed move
+  rationale: string;          // why that move, for this segment
+  derivation: string[];       // how we got to the number, step by step
+  sample: WinbackCustomer[];  // first few, highest lifetime spend
+  more: number;               // how many beyond the sample
+}
+
 export interface RfmResult {
   asOf: string;                 // latest order day (reference for recency)
   totalCustomers: number;       // identifiable (email on file) only
@@ -244,6 +334,8 @@ export interface RfmResult {
   winback: WinbackCustomer[];   // lost regulars, highest lifetime spend first
   winbackTotal: number;         // all lost regulars (winback is capped for display)
   winbackRevenue: number;       // lifetime revenue sitting with lost regulars
+  /** the three segments worth a campaign this month, each fully derivable */
+  winbackSegments: WinbackSegment[];
   // the concentration story: heavy repeaters as a lookalike seed
   fivePlusCustomers: number;    // customers with 5+ orders
   fivePlusRevenueShare: number; // their share of all identifiable lifetime revenue (0–1)
@@ -283,7 +375,7 @@ export async function getRfmSegments(clientId: string): Promise<RfmResult | null
   const keys: RfmSegmentKey[] = ["champions", "slipping", "lost_regulars", "fresh", "cooling_one", "one_and_done"];
   for (const k of keys) seg.set(k, { customers: 0, lifetimeRevenue: 0 });
 
-  const lost: WinbackCustomer[] = [];
+  const members = new Map<RfmSegmentKey, WinbackCustomer[]>();
   let fivePlusCustomers = 0, fivePlusRevenue = 0, allRevenue = 0;
   for (const [email, c] of cust) {
     allRevenue += c.total;
@@ -297,11 +389,59 @@ export async function getRfmSegments(clientId: string): Promise<RfmResult | null
     const s = seg.get(key)!;
     s.customers += 1;
     s.lifetimeRevenue += c.total;
-    if (key === "lost_regulars") {
-      lost.push({ name: c.name, email, orders: c.orders, lifetimeSpend: c.total, lastOrder: c.last });
-    }
+    const list = members.get(key);
+    const row = { name: c.name, email, orders: c.orders, lifetimeSpend: c.total, lastOrder: c.last };
+    if (list) list.push(row); else members.set(key, [row]);
   }
-  lost.sort((a, b) => b.lifetimeSpend - a.lifetimeSpend);
+  for (const list of members.values()) list.sort((a, b) => b.lifetimeSpend - a.lifetimeSpend);
+  const lost = members.get("lost_regulars") ?? [];
+
+  // The three segments worth a campaign this month. Derivation steps state
+  // only what this pipeline actually does — no opt-in status, bounce history
+  // or send-suppression, because none of that reaches us (see DATA-REQUESTS
+  // #16 for the phone/address column that would widen the reachable base).
+  const A = RFM_RULES.activeDays, L = RFM_RULES.lapsedDays;
+  const campaignable: Array<{ key: RfmSegmentKey; rule: string; treatment: string; rationale: string }> = [
+    {
+      key: "lost_regulars",
+      rule: `lifetime_orders >= 2 AND days_since_last_order > ${L}`,
+      treatment: "WhatsApp win-back with an offer — highest lifetime spend first",
+      rationale: "They have already proven they reorder, so this is reactivation rather than persuasion — the cheapest conversion available. Sorted by lifetime spend so the first batch carries the most recoverable value.",
+    },
+    {
+      key: "slipping",
+      rule: `lifetime_orders >= 2 AND days_since_last_order between ${A + 1} and ${L}`,
+      treatment: "Light WhatsApp nudge, no discount",
+      rationale: "One missed cycle, not a lapse. A discount here trains regulars to wait for one — a reminder that their usual items are back in season does the same job without margin.",
+    },
+    {
+      key: "cooling_one",
+      rule: `lifetime_orders = 1 AND days_since_last_order between ${A + 1} and ${L}`,
+      treatment: "Second-purchase prompt — the produce they bought, back in stock",
+      rationale: "The second order is where this account leaks hardest: most customers never place one. Reaching them inside 90 days, while the brand is still familiar, is the single largest growth lever in the base.",
+    },
+  ];
+
+  const winbackSegments: WinbackSegment[] = campaignable.map(({ key, rule, treatment, rationale }) => {
+    const list = members.get(key) ?? [];
+    const s = seg.get(key)!;
+    const band = key === "lost_regulars" ? `more than ${L} days ago` : `between ${A + 1} and ${L} days ago`;
+    const orderRule = key === "cooling_one" ? "exactly one order" : "two or more orders";
+    return {
+      key, label: SEGMENT_META[key].label,
+      count: s.customers, historicValue: s.lifetimeRevenue,
+      rule, treatment, rationale,
+      derivation: [
+        `Start from the Shopify order export: ${rows.length.toLocaleString("en-IN")} orders on file, through ${asOf}.`,
+        `Drop ${anonOrders.toLocaleString("en-IN")} orders with no email — they cannot be contacted, so they cannot be campaigned to. ${cust.size.toLocaleString("en-IN")} identifiable customers remain.`,
+        `Collapse to one row per customer: order count, lifetime spend, and most recent order date.`,
+        `Keep customers with ${orderRule} whose last order was ${band} (measured against ${asOf}, the latest order on file — not today's date).`,
+        `${s.customers.toLocaleString("en-IN")} customers qualify, carrying ₹${Math.round(s.lifetimeRevenue).toLocaleString("en-IN")} of lifetime spend.`,
+      ],
+      sample: list.slice(0, 5),
+      more: Math.max(0, list.length - 5),
+    };
+  });
 
   return {
     asOf,
@@ -311,6 +451,7 @@ export async function getRfmSegments(clientId: string): Promise<RfmResult | null
     winback: lost.slice(0, 30),
     winbackTotal: lost.length,
     winbackRevenue: lost.reduce((s, c) => s + c.lifetimeSpend, 0),
+    winbackSegments,
     fivePlusCustomers,
     fivePlusRevenueShare: allRevenue > 0 ? fivePlusRevenue / allRevenue : 0,
   };

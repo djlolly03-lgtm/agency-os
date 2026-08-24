@@ -39,6 +39,12 @@ export interface Insight {
   severity: InsightSeverity;
   /** one-line recommended next step — omitted when there's genuinely nothing to do */
   action?: string;
+  /** which sheet/tab/export the claim rests on — the "every number traces to
+   *  raw data" promise, made visible rather than asserted */
+  tracesTo?: string;
+  /** what it costs to ignore this, in money or forgone ground. Omitted for
+   *  good news, where inaction costs nothing. */
+  costOfInaction?: string;
   math: {
     steps: InsightMathStep[];
     formula: string;
@@ -108,6 +114,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
       tone: "win",
       severity: "watch",
       action: "Feed it more budget — it's already outperforming the account average.",
+      tracesTo: "Meta ad export (Raw Data tab) → spend and revenue by ad",
+      costOfInaction: "A proven winner stays under-funded while weaker ads keep their budget",
       math: {
         steps: [
           { label: `Creative spend (${monthLabel})`, value: compact(s.a.spend) },
@@ -221,6 +229,9 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         : ltvCacSeverity === "watch"
           ? "Workable but not yet strongly profitable — watch next month before increasing spend."
           : undefined,
+      tracesTo: "Customer counts (customer-data sheet) + Shopify totals + paid spend",
+      costOfInaction: ltvCacSeverity === "fyi" ? undefined
+        : "Acquisition spend that costs more than the customer returns",
       math: {
         steps: [
           { label: "New customers (client-reported)", value: String(latest.newCustomers) },
@@ -246,6 +257,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         tone: up2 ? "win" : "warn",
         severity: up2 ? "fyi" : "watch",
         action: up2 ? undefined : "Retention is thinning — consider a win-back offer or loyalty nudge for lapsing customers.",
+      tracesTo: "Client-reported monthly new vs returning customer counts",
+      costOfInaction: "Every point of repeat rate compounds into lifetime value — losing one compounds the other way",
         math: {
           steps: [
             { label: `${prevM.month.slice(0, 7)} repeat rate`, value: `${Math.round(prevM.repeatRate! * 100)}%` },
@@ -272,6 +285,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         tone: "warn",
         severity: "watch",
         action: `Push remaining budget on ${c.produce.label} now — the window shuts after ${monthLabel}.`,
+      tracesTo: "Campaign and ad names matched to the India produce calendar (src/lib/seasons.ts)",
+      costOfInaction: "A season that closes unsold does not reopen for a year",
         math: {
           steps: [
             { label: `${c.produce.label} season (India)`, value: seasonLabel(c.produce) },
@@ -294,6 +309,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         tone: "ai",
         severity: "watch",
         action: "Launch campaigns on these in-season items before the window passes.",
+      tracesTo: "Produce calendar vs spend by item this month",
+      costOfInaction: "In-season demand we are not competing for at all",
         math: {
           steps: missed.slice(0, 5).map((m) => ({ label: m.produce.label, value: `${seasonLabel(m.produce)} · ₹0 spend this month` })),
           formula: `missed = in season this month AND spend = 0 AND sold historically`,
@@ -312,6 +329,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         tone: "warn",
         severity: "watch",
         action: "Reconsider spend on out-of-season produce — expect thinner returns until season resumes.",
+      tracesTo: "Produce calendar vs spend by item this month",
+      costOfInaction: "Spend fighting supply and demand at the same time",
         math: {
           steps: offSeason.slice(0, 5).map((m) => ({ label: m.produce.label, value: `${compact(m.spend)} spend · season ${seasonLabel(m.produce)}` })),
           formula: `off-season spend = Σ spend on items whose season excludes ${monthLabel}`,
@@ -341,6 +360,9 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         : attSeverity === "watch"
           ? "Close, but short — worth digging into what held the last stretch back."
           : undefined,
+      tracesTo: "Monthly targets (customer-data sheet) vs paid revenue from the platform exports",
+      costOfInaction: attSeverity === "fyi" ? undefined
+        : "The gap compounds — next month starts further behind",
       math: {
         steps: [
           { label: `Goal${input.goal.isDefault ? " (default: prior month +25%)" : ""}`, value: compact(input.goal.target) },
@@ -378,6 +400,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
       tone: "risk",
       severity: "critical",
       action: "Refresh or pause the fatiguing creatives before more budget is wasted on declining ROAS.",
+      tracesTo: "Meta ad export → 14-day vs prior 28-day ROAS by ad",
+      costOfInaction: "Budget flowing into creatives whose returns are already falling",
       math: {
         steps: [
           { label: "Fatiguing = 14d ROAS fell ≥40% vs prior 28d", value: `${fatiguing.length} creatives` },
@@ -407,6 +431,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
       tone: "ai",
       severity: "watch",
       action: "Increase budget carefully on these — the algorithm found a profitable pocket at low spend.",
+      tracesTo: "Meta ad export → 14-day ROAS and spend share by ad",
+      costOfInaction: "Proven pockets left unscaled while budget sits on average performers",
       math: {
         steps: [
           { label: "Hidden gem = 14d ROAS ≥ 1.5× account, on <5% of spend", value: `${gems.length} qualify` },
@@ -437,6 +463,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
       tone: behind ? "risk" : "win",
       severity: behind ? "critical" : "fyi",
       action: behind ? "Increase spend or fix conversion issues now to catch up before month-end." : undefined,
+      tracesTo: "Month-to-date platform exports vs the month goal",
+      costOfInaction: "Month-end arrives whether or not the gap was closed",
       math: {
         steps: [
           { label: `Monthly goal${rev.goalIsDefault ? " (default: last month +25%)" : ""}`, value: compact(rev.goal) },

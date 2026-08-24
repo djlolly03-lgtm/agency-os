@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  getClientBySlug, getMonths, getMonthlyReport, getCustomerEconomics,
+  getClientBySlug, getMonths, getMonthlyReport, getCustomerEconomics, getCreatives,
   getMonthlyNameRollups, getAdRangeRollups, getTimeseries, getGoals, getFunnelMonthly,
   getReviewNotes, REVIEW_SECTIONS,
 } from "@/lib/queries";
-import { getRfmSegments } from "@/lib/shopify";
+import { getRfmSegments, getCohortHorizons } from "@/lib/shopify";
+import { CohortHorizons } from "@/components/cohort-horizons";
+import { WinbackQueue } from "@/components/winback-queue";
+import { CreativeConcentration, type ConcentrationRow } from "@/components/creative-concentration";
 import { getRetentionChannels } from "@/lib/retention";
 import { aggregateProduceMonth, classifyProduce, seasonRadar } from "@/lib/seasons";
 import { computeInsights } from "@/lib/insights";
@@ -70,7 +73,7 @@ export default async function ReviewPage({ params, searchParams }: {
   const prevLabel = monthLabel(prevMonth.slice(0, 7));
 
   const [report, custMonths, rfm, nameRollups, adRollups, daily, goalRows, retention,
-    funnelMonthly, notes, prevNotes] = await Promise.all([
+    funnelMonthly, notes, prevNotes, cohortHorizons, creatives] = await Promise.all([
     getMonthlyReport(client.id),
     getCustomerEconomics(client.id),
     getRfmSegments(client.id),
@@ -82,6 +85,8 @@ export default async function ReviewPage({ params, searchParams }: {
     getFunnelMonthly(client.id),
     getReviewNotes(client.id, month),
     getReviewNotes(client.id, prevMonth),
+    getCohortHorizons(client.id),
+    getCreatives(client.id),
   ]);
 
   const row = report.find((r) => r.month === month);
@@ -187,6 +192,41 @@ export default async function ReviewPage({ params, searchParams }: {
   const trendPoints = report.slice(-10).map((r) => ({
     month: r.month, value: r.totalRevenue ?? (r.meta.revenue + r.google.revenue),
   }));
+
+  // ---- creative concentration: top assets by month spend, with age ----
+  const adSpendTotal = adRollups.reduce((s, a) => s + a.spend, 0);
+  const ageByAd = new Map(creatives.map((c) => [c.ad_id, c.first_day]));
+  const monthEndMs = Date.parse(monthEnd + "T00:00:00Z");
+  const TOP_N = 3;
+  const topAds = [...adRollups].sort((a, b) => b.spend - a.spend).slice(0, TOP_N);
+  const tailAds = adRollups.slice(TOP_N);
+  const concentration: ConcentrationRow[] = adSpendTotal > 0 ? [
+    ...topAds.map((a): ConcentrationRow => {
+      const first = ageByAd.get(a.ad_id);
+      const age = first ? Math.max(0, Math.round((monthEndMs - Date.parse(first + "T00:00:00Z")) / 86400000)) : null;
+      const roas = a.spend > 0 ? a.revenue / a.spend : null;
+      return {
+        name: a.ad_name, ageDays: age, spend: a.spend, share: a.spend / adSpendTotal, roas,
+        read: age != null && age >= 40
+          ? (roas != null && roas >= 2 ? "Still performing, but the oldest money in rotation" : "Old and no longer earning — retire or refresh")
+          : roas != null && roas >= 2.5 ? "Recent and earning — the one to scale"
+          : "Recent, still proving itself",
+      };
+    }),
+    ...(tailAds.length ? [{
+      name: `Everything else (${tailAds.length} ad${tailAds.length === 1 ? "" : "s"})`,
+      ageDays: null,
+      spend: tailAds.reduce((s, a) => s + a.spend, 0),
+      share: tailAds.reduce((s, a) => s + a.spend, 0) / adSpendTotal,
+      roas: (() => {
+        const sp = tailAds.reduce((s, a) => s + a.spend, 0);
+        return sp > 0 ? tailAds.reduce((s, a) => s + a.revenue, 0) / sp : null;
+      })(),
+      read: "Long tail — none individually material",
+      isTail: true,
+    } as ConcentrationRow] : []),
+  ] : [];
+  const topShare = topAds.reduce((s, a) => s + a.spend, 0) / Math.max(adSpendTotal, 1);
 
   const challenges = REVIEW_SECTIONS.find((s) => s.key === "challenges")!;
   const support = REVIEW_SECTIONS.find((s) => s.key === "support_needed")!;
@@ -333,6 +373,13 @@ export default async function ReviewPage({ params, searchParams }: {
                     <div className="text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
                       <strong className="tabular">{c.metric}</strong> {c.text}
                     </div>
+                    {(c.tracesTo || c.costOfInaction) && (
+                      <div className="mt-1.5 flex flex-col gap-0.5 border-t pt-1.5 text-[10.5px] leading-4"
+                        style={{ borderColor: "var(--border-hairline)", color: "var(--text-muted)" }}>
+                        {c.tracesTo && <span><strong style={{ color: "var(--text-secondary)" }}>Traces to:</strong> {c.tracesTo}</span>}
+                        {c.costOfInaction && <span><strong style={{ color: "var(--text-secondary)" }}>Cost of doing nothing:</strong> {c.costOfInaction}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -513,6 +560,18 @@ export default async function ReviewPage({ params, searchParams }: {
             </div>
           </div>
         )}
+
+        {/* creative concentration — how few assets carry the delivery, and how old */}
+        {concentration.length >= 2 && (
+          <div className="mt-6 flex flex-col gap-3">
+            {qa("Question 03", "How much rests on how little?",
+              topShare >= 0.55
+                ? `${pct(topShare, 0)} of the month's delivery sat on ${topAds.length} creatives.`
+                : `Delivery is spread across the library — no single asset is load-bearing.`,
+              topShare >= 0.55 ? "var(--status-warning)" : "var(--text-primary)")}
+            <CreativeConcentration rows={concentration} topShare={topShare} />
+          </div>
+        )}
       </section>
 
       {/* ============ 04 · THE PEOPLE ============ */}
@@ -578,19 +637,49 @@ export default async function ReviewPage({ params, searchParams }: {
                 })}
               </div>
               <p className="text-[11.5px] leading-5" style={{ color: "var(--text-secondary)" }}>
-                The outlined segments are the month&rsquo;s targets — the win-back list (names + numbers) is on the{" "}
-                <Link href={`/${slug}/internal#winback`} className="underline" style={{ color: "var(--brand)" }}>internal page</Link>.
                 Lookalike seed: the <strong className="tabular">{num(twoPlus)}</strong> two-plus-order customers
                 (the {num(rfm.fivePlusCustomers)} five-plus buyers alone carry {pct(rfm.fivePlusRevenueShare, 0)} of
                 revenue, but {num(rfm.fivePlusCustomers)}{" "}is below Meta&rsquo;s ~1,000-row floor).
               </p>
             </>
           )}
+
+          {/* the queue — each segment auditable down to its filter */}
+          {rfm && rfm.winbackSegments.length > 0 && (
+            <div className="mt-4 flex flex-col gap-3">
+              <div className="text-[11px] font-extrabold uppercase tracking-[0.16em]">
+                The win-back queue · click a segment to see how it was built
+              </div>
+              <WinbackQueue segments={rfm.winbackSegments} slug={slug} />
+            </div>
+          )}
         </div>
+
+        {/* cohort retention at day-horizons — does each intake hold better or worse */}
+        {cohortHorizons && cohortHorizons.length >= 3 && (
+          <div className="mt-6 flex flex-col gap-3">
+            {(() => {
+              // censored first cohort excluded — it carries pre-export loyalty
+              // and would invert the direction of a real trend
+              const ripe = cohortHorizons.filter((c) => !c.censored && c.r30 != null && c.size >= 20);
+              const d = ripe.length >= 2 ? ripe[ripe.length - 1].r30! - ripe[0].r30! : null;
+              const answer = d == null ? "Not enough aged cohorts to call it yet."
+                : Math.abs(d) < 0.01
+                  ? "Flat — acquisition quality is steady, so the lever is retention, not targeting."
+                  : d > 0
+                    ? `Yes — 30-day repeat is up ${Math.round(d * 100)} points since the ${shortMonth(ripe[0].month)} cohort.`
+                    : `No — 30-day repeat is down ${Math.round(Math.abs(d) * 100)} points since the ${shortMonth(ripe[0].month)} cohort.`;
+              const color = d == null ? "var(--text-primary)"
+                : d < -0.01 ? "var(--status-critical)" : d > 0.01 ? "var(--status-good)" : "var(--text-primary)";
+              return qa("Question 04", "Is each new intake holding better than the last?", answer, color);
+            })()}
+            <CohortHorizons cohorts={cohortHorizons} />
+          </div>
+        )}
 
         {(radar.riding.length > 0 || radar.missed.length > 0) && (
           <div className="mt-6 flex flex-col gap-3">
-            {qa("Question 04", `What do we sell after ${mLabel.split(" ")[0]}?`,
+            {qa("Question 05", `What do we sell after ${mLabel.split(" ")[0]}?`,
               radar.missed.length > 0
                 ? `The open windows — ${radar.missed.slice(0, 2).map((m) => m.produce.label).join(" and ")} ${radar.missed.length > 1 ? "are" : "is"} in season with zero spend${radar.closing.length ? `, and ${radar.closing[0].produce.label}'s window closes now` : ""}.`
                 : `Stay on the winners — ${radar.riding.slice(0, 3).map((r) => r.produce.label).join(", ")} are still inside their windows.`)}
