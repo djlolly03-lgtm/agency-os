@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getClientBySlug, latestDay } from "@/lib/queries";
+import { getClientBySlug, latestDay, getDataFreshness } from "@/lib/queries";
 import { getDb } from "@/lib/db";
 import { Nav } from "@/components/nav";
 import { SyncChip } from "@/components/sync-chip";
@@ -25,11 +25,12 @@ export default async function ClientLayout({
   if (!client) notFound();
 
   const db = await getDb();
-  const [lastDay, syncRows] = await Promise.all([
+  const [lastDay, syncRows, freshness] = await Promise.all([
     latestDay(client.id),
     db.query<{ ran_at: string }>(
       `select ran_at::text as ran_at from sync_runs where client_id = $1 order by ran_at desc limit 1`,
       [client.id]),
+    getDataFreshness(client.id),
   ]);
 
   return (
@@ -49,7 +50,8 @@ export default async function ClientLayout({
           <Nav slug={slug} items={NAV} />
         </div>
         <div className="pointer-events-auto hidden lg:block">
-          <SyncChip slug={slug} lastDay={lastDay} lastSync={syncRows[0]?.ran_at ?? null} />
+          <SyncChip slug={slug} lastDay={lastDay} lastSync={syncRows[0]?.ran_at ?? null}
+            ordersThrough={freshness.orders} />
         </div>
       </header>
 

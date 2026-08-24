@@ -836,6 +836,33 @@ export async function getGoals(clientId: string, month: string) {
     `select metric, target from goals where client_id = $1 and month = $2`, [clientId, month]);
 }
 
+// ---------- data freshness ----------
+
+export interface DataFreshness {
+  ads: string | null;            // latest day of Meta/Google delivery data
+  orders: string | null;         // latest day in the Shopify order export
+  clientMonthly: string | null;  // latest month with client-reported counts
+}
+
+/**
+ * Per-source latest dates. The account has two clocks: ad platforms sync
+ * nightly and run current, while the customer-side export is refreshed by
+ * hand and can sit weeks behind. Presenting one "data through" date for both
+ * is how a stale cohort or LTV number gets read as a live one — so every
+ * surface that leans on order data states its own age.
+ */
+export async function getDataFreshness(clientId: string): Promise<DataFreshness> {
+  const db = await getDb();
+  const [ads] = await db.query<{ d: string | null }>(
+    `select max(day)::text d from unified_daily where client_id = $1`, [clientId]);
+  const [orders] = await db.query<{ d: string | null }>(
+    `select max(day)::text d from shopify_orders where client_id = $1`, [clientId]);
+  const [cm] = await db.query<{ d: string | null }>(
+    `select max(month)::text d from manual_actuals
+     where client_id = $1 and metric in ('new_customers','returning_customers')`, [clientId]);
+  return { ads: ads?.d ?? null, orders: orders?.d ?? null, clientMonthly: cm?.d ?? null };
+}
+
 // ---------- monthly review notes (the narrative the data can't produce) ----------
 
 /**

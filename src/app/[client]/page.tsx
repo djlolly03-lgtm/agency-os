@@ -3,11 +3,12 @@ import { notFound } from "next/navigation";
 import {
   getClientBySlug, getOverview, getTimeseries, getCreatives, getPacing, getDivisionOverview, getMonths,
   getFunnel, getDailyBlended, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
-  getCustomerEconomics, getMeasuredLtv, latestDay, getCampaignMonthly,
+  getCustomerEconomics, getMeasuredLtv, latestDay, getCampaignMonthly, getDataFreshness,
 } from "@/lib/queries";
 import { getCohortRetention, getRfmSegments } from "@/lib/shopify";
 import { getRetentionChannels } from "@/lib/retention";
 import { RetentionChannels } from "@/components/retention-channels";
+import { StaleNotice } from "@/components/stale-notice";
 import { CohortRetention } from "@/components/cohort-retention";
 import { ExecSummary, EXEC_SUMMARY_COUNT } from "@/components/exec-summary";
 import { Collapsible } from "@/components/collapsible";
@@ -91,11 +92,12 @@ export default async function OverviewPage({ params, searchParams }: {
     getCustomerEconomics(client.id),
     getMeasuredLtv(client.id),
   ]);
-  const [cohortData, rfm, retentionMonths, campaignMonthly] = await Promise.all([
+  const [cohortData, rfm, retentionMonths, campaignMonthly, freshness] = await Promise.all([
     getCohortRetention(client.id),
     getRfmSegments(client.id),
     getRetentionChannels(client.id),
     getCampaignMonthly(client.id),
+    getDataFreshness(client.id),
   ]);
   // blended per-day totals across all history — day-of-week rule
   const blendedByDay = new Map<string, { day: string; spend: number; revenue: number; purchases: number }>();
@@ -567,6 +569,12 @@ export default async function OverviewPage({ params, searchParams }: {
         <SectionHeader index={num2()} eyebrow="Customer engine" title="What a customer costs — and what one is worth"
           meta="from client-reported monthly customer counts" scope={custScope} />
       </FadeIn>
+      {isMonthMode && (
+        <FadeIn delay={0.05}>
+          <StaleNotice selectedMonth={selectedMonth} ordersThrough={freshness.orders}
+            shownMonth={custScopeMonth?.month ?? null} slug={slug} />
+        </FadeIn>
+      )}
       <FadeIn delay={0.05}>
         <SpotlightStage>
           <CustomerEconomics months={custMonths} slug={slug} measuredLtv={measuredLtv} rfm={rfm} />
@@ -580,6 +588,11 @@ export default async function OverviewPage({ params, searchParams }: {
             <SectionHeader index={num2()} eyebrow="Cohorts" title="Who comes back, and when."
               meta="signup month × months since — from the Shopify order history" scope="All time" />
           </FadeIn>
+          {isMonthMode && (
+            <FadeIn delay={0.05}>
+              <StaleNotice selectedMonth={selectedMonth} ordersThrough={freshness.orders} slug={slug} />
+            </FadeIn>
+          )}
           <FadeIn delay={0.05}>
             <CohortRetention cohorts={cohortData.cohorts} maxOffset={cohortData.maxOffset} />
           </FadeIn>

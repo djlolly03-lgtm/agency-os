@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import {
   getClientBySlug, getMonths, latestDay, getMonthlyReport, getCustomerEconomics, getCreatives,
   getMonthlyNameRollups, getAdRangeRollups, getTimeseries, getGoals, getFunnelMonthly,
-  getReviewNotes, getCampaignMonthly, REVIEW_SECTIONS,
+  getReviewNotes, getCampaignMonthly, getDataFreshness, REVIEW_SECTIONS,
 } from "@/lib/queries";
 import { getRfmSegments, getCohortHorizons } from "@/lib/shopify";
 import { CohortHorizons } from "@/components/cohort-horizons";
+import { StaleNotice } from "@/components/stale-notice";
 import { WinbackQueue } from "@/components/winback-queue";
 import { CreativeConcentration, type ConcentrationRow } from "@/components/creative-concentration";
 import { getRetentionChannels } from "@/lib/retention";
@@ -80,7 +81,7 @@ export default async function ReviewPage({ params, searchParams }: {
   const prevLabel = monthLabel(prevMonth.slice(0, 7));
 
   const [report, custMonths, rfm, nameRollups, adRollups, daily, goalRows, retention,
-    funnelMonthly, notes, prevNotes, cohortHorizons, creatives, campaignMonthly] = await Promise.all([
+    funnelMonthly, notes, prevNotes, cohortHorizons, creatives, campaignMonthly, freshness] = await Promise.all([
     getMonthlyReport(client.id),
     getCustomerEconomics(client.id),
     getRfmSegments(client.id),
@@ -95,6 +96,7 @@ export default async function ReviewPage({ params, searchParams }: {
     getCohortHorizons(client.id),
     getCreatives(client.id),
     getCampaignMonthly(client.id),
+    getDataFreshness(client.id),
   ]);
 
   const row = report.find((r) => r.month === month);
@@ -597,6 +599,9 @@ export default async function ReviewPage({ params, searchParams }: {
       <div className="page-break" />
       <PageBand n="04 · The people" title="The growth hiding in the customer base." client={client.name} />
       <section className="review-block card px-6 py-6">
+        <div className="mb-4">
+          <StaleNotice selectedMonth={month} ordersThrough={freshness.orders} slug={slug} />
+        </div>
 
         <div className="flex flex-col gap-3">
           {qa("Question 03", "Who should we be talking to?",
