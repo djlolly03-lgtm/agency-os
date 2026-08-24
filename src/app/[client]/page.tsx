@@ -23,7 +23,7 @@ import { PacingCard } from "@/components/pacing-card";
 import { PeriodPicker } from "@/components/period-picker";
 import { OnlineOfflineCard, DivisionCards, HeroLoserCards } from "@/components/division-section";
 import { FadeIn, AnimatedNumber } from "@/components/motion";
-import { InsightChips } from "@/components/insight-chips";
+import { InsightList } from "@/components/insight-list";
 import { SectionHeader } from "@/components/section-header";
 import { Explain } from "@/components/explain";
 import { HeroCinema } from "@/components/hero-cinema";
@@ -409,9 +409,24 @@ export default async function OverviewPage({ params, searchParams }: {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ===== what to do now, before anything else ===== */}
+      {/* ===== One section, two halves: the handful worth acting on, then
+           everything else the numbers are saying. Splitting them is the
+           point — a list where instructions and status share a voice is a
+           list nobody triages. ===== */}
+      <FadeIn>
+        <SectionHeader eyebrow="Signals" title="What the data is telling us"
+          meta="the priority actions first, then the rest" />
+      </FadeIn>
       <FadeIn>
         <ExecSummary insights={insights} periodLabel={periodLabel} clientName={client.name} />
+      </FadeIn>
+      <FadeIn delay={0.05}>
+        <div className="flex flex-col gap-2">
+          <span className="text-[13px] font-extrabold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
+            What else the data is telling us
+          </span>
+          <InsightList insights={insights} exclude={movesShown} />
+        </div>
       </FadeIn>
 
       {/* ===== CINEMA HERO — full-bleed, spotlight reveals the data =====
@@ -421,8 +436,8 @@ export default async function OverviewPage({ params, searchParams }: {
           pulling the hero up would drag it over the summary's lower lines
           instead — exactly what was happening. */}
       <div>
-        <HeroCinema skyline={[]} minHeight="auto">
-          <div className="flex flex-col gap-5 pb-8 pt-24 sm:pt-28">
+        <HeroCinema skyline={sparkRevenue} minHeight="360px">
+          <div className="flex flex-col justify-end gap-5 pb-8 pt-24 sm:pt-28" style={{ minHeight: "360px" }}>
             {/* No display headline here: the console's first job is the
                 moves above, and a full-width serif title pushed real content
                 below the fold for no information. Period + numbers only. */}
@@ -517,16 +532,6 @@ export default async function OverviewPage({ params, searchParams }: {
       )}
       <FadeIn delay={0.05}>
         <CustomerSnapshot months={custMonths} slug={slug} rfm={rfm} />
-      </FadeIn>
-
-      {/* ===== INSIGHTS (scoped to selection) ===== */}
-      <FadeIn delay={0.05}>
-        <SectionHeader eyebrow="Signals" title="What the data is telling us"
-          meta="context behind the moves — status, trends, seasonality" />
-      </FadeIn>
-      <FadeIn delay={0.05}>
-        {/* everything the moves block didn't take — status readings, context */}
-        <InsightChips insights={insights} exclude={movesShown} />
       </FadeIn>
 
       {/* ===== Money flow ===== */}

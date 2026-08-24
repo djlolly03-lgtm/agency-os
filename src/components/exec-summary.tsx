@@ -26,11 +26,11 @@ export function ExecSummary({ insights, periodLabel, clientName }: {
     <div className="card px-5 py-4">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex flex-col">
-          <span className="text-[15px] font-extrabold tracking-tight" style={{ color: "var(--text-primary)" }}>
-            Do this now
+          <span className="text-[13px] font-extrabold uppercase tracking-[0.14em]" style={{ color: "var(--status-critical)" }}>
+            Most important to do
           </span>
           <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-            {moves.length === 1 ? "One move" : `${moves.length} moves`} the numbers are asking for
+            {moves.length === 1 ? "One move" : `${moves.length} moves`} the numbers are asking for, in order
           </span>
         </div>
         <ShareSummary insights={moves} periodLabel={periodLabel} clientName={clientName} />
