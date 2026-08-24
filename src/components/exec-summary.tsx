@@ -7,9 +7,6 @@ import { ChevronDown } from "lucide-react";
 import type { Insight } from "@/lib/insights";
 import { ShareSummary } from "@/components/share-summary";
 
-/** How many moves lead the console. The signals list below skips these. */
-export const EXEC_SUMMARY_COUNT = 3;
-
 /**
  * The priority actions, each openable into the full case behind it.
  *
@@ -20,11 +17,12 @@ export const EXEC_SUMMARY_COUNT = 3;
  * and what ignoring it costs. The link out to the underlying data comes
  * last, for when someone wants to go further than the case.
  */
-export function ExecSummary({ insights, periodLabel, clientName }: {
-  insights: Insight[]; periodLabel: string; clientName: string;
+export function ExecSummary({ moves, periodLabel, clientName }: {
+  /** already selected server-side, so this block and the signals list below
+   *  are guaranteed to be disjoint */
+  moves: Insight[]; periodLabel: string; clientName: string;
 }) {
   const [open, setOpen] = useState<number | null>(null);
-  const moves = insights.filter((i) => i.kind === "move" && i.action).slice(0, EXEC_SUMMARY_COUNT);
   if (!moves.length) return null;
 
   return (

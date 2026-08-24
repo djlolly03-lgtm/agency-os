@@ -64,6 +64,11 @@ export interface Insight {
   link?: { href: string; label: string };
 }
 
+/** How many moves lead the console. Lives here, not in the client
+ *  component: a value exported from a "use client" module arrives in
+ *  server code as a client reference, not a number. */
+export const MOVE_COUNT = 3;
+
 const SEVERITY_RANK: Record<InsightSeverity, number> = { critical: 0, watch: 1, fyi: 2 };
 export const SEVERITY_LABEL: Record<InsightSeverity, string> = {
   critical: "Needs action",

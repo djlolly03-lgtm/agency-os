@@ -26,13 +26,9 @@ const SEV: Record<InsightSeverity, { label: string; color: string }> = {
  * So: one card, one row per signal, metric inline and bold, severity as a
  * small marker rather than a pill, and the derivation one click down.
  */
-export function InsightList({ insights, exclude = [] }: {
-  insights: Insight[];
-  /** categories already shown as moves at the top — never repeat them here */
-  exclude?: string[];
-}) {
+export function InsightList({ insights }: { insights: Insight[] }) {
   const [open, setOpen] = useState<number | null>(null);
-  const rows = insights.filter((i) => !exclude.includes(i.category));
+  const rows = insights;
   if (!rows.length) return null;
 
   return (

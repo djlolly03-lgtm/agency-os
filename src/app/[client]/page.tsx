@@ -9,12 +9,12 @@ import { getRfmSegments } from "@/lib/shopify";
 import { getRetentionChannels } from "@/lib/retention";
 import { RetentionChannels } from "@/components/retention-channels";
 import { StaleNotice } from "@/components/stale-notice";
-import { ExecSummary, EXEC_SUMMARY_COUNT } from "@/components/exec-summary";
+import { ExecSummary } from "@/components/exec-summary";
 import { Collapsible } from "@/components/collapsible";
 import { CustomerSnapshot } from "@/components/customer-snapshot";
 import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar } from "@/lib/seasons";
 import { Funnel } from "@/components/funnel";
-import { computeInsights } from "@/lib/insights";
+import { computeInsights, MOVE_COUNT } from "@/lib/insights";
 import { inr, inrCompact, num, ratio, pct, dayLabel, monthLabel } from "@/lib/format";
 import { KpiTile } from "@/components/kpi";
 import { TrendChart } from "@/components/trend-chart";
@@ -231,11 +231,11 @@ export default async function OverviewPage({ params, searchParams }: {
     campaignMonthly, dailyAll: blendedDaily, asOf,
   });
 
-  // the moves the top block will show — Signals excludes these by identity
-  const movesShown = insights
-    .filter((i) => i.kind === "move" && i.action)
-    .slice(0, EXEC_SUMMARY_COUNT)
-    .map((i) => i.category);
+  // Split the list on the SERVER rather than handing the client component an
+  // exclude list to honour — the two blocks then cannot drift out of sync,
+  // and there is no prop to forget to pass.
+  const moveInsights = insights.filter((i) => i.kind === "move" && i.action).slice(0, MOVE_COUNT);
+  const restInsights = insights.filter((i) => !moveInsights.includes(i));
 
   // ---- store-revenue view (matches the client's sheet mental model) ----
   let storeTotal: number | null;
@@ -418,14 +418,14 @@ export default async function OverviewPage({ params, searchParams }: {
           meta="the priority actions first, then the rest" />
       </FadeIn>
       <FadeIn>
-        <ExecSummary insights={insights} periodLabel={periodLabel} clientName={client.name} />
+        <ExecSummary moves={moveInsights} periodLabel={periodLabel} clientName={client.name} />
       </FadeIn>
       <FadeIn delay={0.05}>
         <div className="flex flex-col gap-2">
           <span className="text-[13px] font-extrabold uppercase tracking-[0.14em]" style={{ color: "var(--text-muted)" }}>
             What else the data is telling us
           </span>
-          <InsightList insights={insights} exclude={movesShown} />
+          <InsightList insights={restInsights} />
         </div>
       </FadeIn>
 
