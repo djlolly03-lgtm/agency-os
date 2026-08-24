@@ -37,6 +37,17 @@ export interface Insight {
   text: string;
   tone: "win" | "warn" | "risk" | "info" | "ai";
   severity: InsightSeverity;
+  /**
+   * move   — names a specific thing to CHANGE this week: a budget, a
+   *          schedule, a creative, an audience. A buyer can act on it today.
+   * signal — reports state. True and worth knowing, but nothing to do
+   *          with it directly.
+   * The console leads with moves; signals sit underneath. Without this
+   * split, severity ranking floats status ("LTV:CAC is 1.7×") above
+   * instructions ("cap this campaign"), which is how a decision engine
+   * quietly turns back into a report.
+   */
+  kind: "move" | "signal";
   /** one-line recommended next step — omitted when there's genuinely nothing to do */
   action?: string;
   /** which sheet/tab/export the claim rests on — the "every number traces to
@@ -161,6 +172,7 @@ function buyerInsights(input: MonthInsightInput): Insight[] {
       out.push({
         icon: "trend-down",
         category: "Scaled past the ceiling",
+        kind: "move",
         metric: `${c.lRoas.toFixed(2)}×`,
         text: `“${truncate(c.name, 44)}” returns ${c.lRoas.toFixed(2)}× against a ${blended.toFixed(2)}× account — down from ${c.eRoas.toFixed(2)}× earlier in its life, while its budget rose ${Math.round(c.spendUp * 100)}%.`,
         tone: "risk",
@@ -232,6 +244,7 @@ function buyerInsights(input: MonthInsightInput): Insight[] {
       out.push({
         icon: "zap",
         category: "Same product, wrong platform",
+        kind: "move",
         metric: `${s.hi.roas.toFixed(2)}× vs ${s.lo.roas.toFixed(2)}×`,
         text: `${label} returns ${s.hi.roas.toFixed(2)}× on ${pfName(s.hi.platform)} but only ${s.lo.roas.toFixed(2)}× on ${pfName(s.lo.platform)} — same product, same weeks.`,
         tone: "warn",
@@ -279,6 +292,7 @@ function buyerInsights(input: MonthInsightInput): Insight[] {
         out.push({
           icon: "target",
           category: "Weekday buying",
+          kind: "move",
           metric: `${Math.round(gap * 100)}%`,
           text: `${best.name}s return ${best.roas.toFixed(2)}× and ${worst.name}s ${worst.roas.toFixed(2)}× — yet spend is within ${Math.round(spendSpread * 100)}% across every day of the week.`,
           tone: "warn",
@@ -321,7 +335,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     const overBy = Math.round((s.roas / baseRoas - 1) * 100);
     out.push({
       icon: "flame",
-      category: `Creative winner · ${monthLabel}`,
+      category: "Creative winner",
+      kind: "move",
       metric: `+${overBy}%`,
       text: `“${truncate(s.a.ad_name)}” beat the account average — ${s.roas.toFixed(2)}× ROAS on ${compact(s.a.spend)}.`,
       tone: "win",
@@ -361,7 +376,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
         const range = (xs: typeof monthDaily) => `${xs[0].day.slice(5)} → ${xs[xs.length - 1].day.slice(5)}`;
         out.push({
           icon: up ? "trend-up" : "trend-down",
-          category: `CPA trend · ${monthLabel}`,
+          category: "Cost per order",
+          kind: "signal",
           metric: `${up ? "+" : "−"}${Math.round(Math.abs(deltaPct))}%`,
           text: up
             ? `Cost per order rose to ${inr(recent)} in the last 5 days of the period (was ${inr(prior)}).`
@@ -397,7 +413,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
       const pctGap = Math.round(Math.abs(gap) * 100);
       out.push({
         icon: "zap",
-        category: `Platform mix · ${monthLabel}`,
+        category: "Platform mix",
+        kind: "signal",
         metric: `+${pctGap}%`,
         text: `${googleBetter ? "Google" : "Meta"} outperformed ${googleBetter ? "Meta" : "Google"} on ROAS (${(googleBetter ? google : meta).roas.toFixed(2)}× vs ${(googleBetter ? meta : google).roas.toFixed(2)}×).`,
         tone: "info",
@@ -432,7 +449,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     const ltvCacSeverity: InsightSeverity = latest.ltvCac! >= 3 ? "fyi" : latest.ltvCac! >= 2 ? "watch" : "critical";
     out.push({
       icon: "users",
-      category: `Customer economics · ${latest.month.slice(0, 7)}`,
+      category: "Customer economics",
+      kind: "signal",
       metric: `${latest.ltvCac!.toFixed(1)}×`,
       text: `LTV:CAC — every ₹1 of acquisition buys ${inr(latest.ltvCac!)} of expected lifetime revenue${prevM ? ` (${prevM.ltvCac!.toFixed(1)}× the month before)` : ""}.`,
       tone: latest.ltvCac! >= 3 ? "win" : latest.ltvCac! >= 2 ? "info" : "risk",
@@ -465,6 +483,7 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
       out.push({
         icon: "users",
         category: "Loyalty trend",
+        kind: "signal",
         metric: `${up2 ? "+" : "−"}${Math.abs((latest.repeatRate! - prevM.repeatRate!) * 100).toFixed(0)}pt`,
         text: `Repeat rate ${up2 ? "climbed" : "fell"} to ${Math.round(latest.repeatRate! * 100)}% — ${up2 ? "customers are coming back; every point here compounds LTV" : "returning customers thinned; retention needs attention"}.`,
         tone: up2 ? "win" : "warn",
@@ -492,7 +511,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
       const roas = c.spend > 0 ? c.revenue / c.spend : 0;
       out.push({
         icon: "sun",
-        category: `Season closing · ${monthLabel}`,
+        category: "Season closing",
+        kind: "move",
         metric: c.produce.label,
         text: `window shuts after ${monthLabel} — ${compact(c.revenue)} so far${roas > 0 ? ` at ${roas.toFixed(2)}×` : ""}. Last call to push${closing.length > 1 ? ` (+${closing.length - 1} more closing)` : ""}.`,
         tone: "warn",
@@ -516,7 +536,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     if (missed.length) {
       out.push({
         icon: "leaf",
-        category: `Open windows · ${monthLabel}`,
+        category: "Open windows",
+        kind: "move",
         metric: String(missed.length),
         text: `in-season item${missed.length > 1 ? "s" : ""} with zero spend — nature is shipping, we aren't selling. Full list in Seasons, below.`,
         tone: "ai",
@@ -536,7 +557,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     if (offSeason.length && offSpend >= 1000) {
       out.push({
         icon: "trend-down",
-        category: `Fighting the calendar · ${monthLabel}`,
+        category: "Fighting the calendar",
+        kind: "move",
         metric: compact(offSpend),
         text: `spent on out-of-season produce — ${offSeason.slice(0, 3).map((m) => m.produce.label).join(", ")}. Expect thinner supply and softer demand.`,
         tone: "warn",
@@ -561,7 +583,8 @@ export function computeInsights(input: MonthInsightInput): Insight[] {
     const attSeverity: InsightSeverity = att >= 1 ? "fyi" : att >= 0.85 ? "watch" : "critical";
     out.push({
       icon: att >= 1 ? "check" : "target",
-      category: `Goal attainment · ${monthLabel}`,
+      category: "Goal attainment",
+      kind: "signal",
       metric: `${Math.round(att * 100)}%`,
       text: att >= 1
         ? `of the revenue goal was hit — ${compact(input.monthRevenue)} against ${compact(input.goal.target)}.`
@@ -607,7 +630,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
   if (fatiguing.length && winSpend > 0 && fatigueSpend / winSpend >= 0.08) {
     out.push({
       icon: "trend-down",
-      category: "Creative fatigue · now",
+      category: "Creative fatigue",
+      kind: "move",
       metric: `${Math.round((100 * fatigueSpend) / winSpend)}%`,
       text: `of current spend sits on ${fatiguing.length} fatiguing creative${fatiguing.length > 1 ? "s" : ""} — refresh or rotate.`,
       tone: "risk",
@@ -638,7 +662,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
       b.window_revenue / Math.max(b.window_spend, 1) - a.window_revenue / Math.max(a.window_spend, 1)).slice(0, 4);
     out.push({
       icon: "gem",
-      category: "Scale opportunity · now",
+      category: "Scale opportunity",
+      kind: "move",
       metric: String(gems.length),
       text: `hidden gem${gems.length > 1 ? "s" : ""} running high ROAS on tiny budgets — feed the winners.`,
       tone: "ai",
@@ -668,7 +693,8 @@ function currentMonthInsights(input: MonthInsightInput): Insight[] {
     const behind = rev.paceRatio < 0.9;
     out.push({
       icon: behind ? "target" : "check",
-      category: "Revenue pacing · MTD",
+      category: "Revenue pacing",
+      kind: "signal",
       metric: `${Math.round((100 * rev.projected) / rev.goal)}%`,
       text: behind
         ? `of goal is where this month lands at the current run rate — pacing ${Math.round((1 - rev.paceRatio) * 100)}% behind.`

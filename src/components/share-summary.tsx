@@ -14,12 +14,15 @@ export function ShareSummary({ insights, periodLabel, clientName }: {
 }) {
   const [state, setState] = useState<"idle" | "copied">("idle");
 
+  // the instruction leads, the evidence follows — same order as on screen,
+  // so a pasted WhatsApp message reads as a to-do list rather than a report
   const buildText = () => {
-    const lines = insights.slice(0, 3).flatMap((i) => [
-      `• ${i.metric} — ${i.text}`,
-      ...(i.action ? [`   → ${i.action}`] : []),
+    const lines = insights.slice(0, 3).flatMap((i, n) => [
+      `${n + 1}. ${i.action ?? i.text}`,
+      `   ${i.metric} — ${i.text}`,
+      ...(i.costOfInaction ? [`   Leaving it: ${i.costOfInaction}`] : []),
     ]);
-    return [`${clientName} · ${periodLabel}`, ...lines].join("\n");
+    return [`${clientName} · ${periodLabel} — do this now`, ...lines].join("\n");
   };
 
   const handleShare = async () => {

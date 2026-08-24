@@ -1,71 +1,74 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import type { Insight } from "@/lib/insights";
-import { TONE_COLOR } from "@/lib/insights";
 import { ShareSummary } from "@/components/share-summary";
 
-/** How many insights get promoted above the hero. Signals skips these. */
+/** How many moves lead the console. Signals below skip these. */
 export const EXEC_SUMMARY_COUNT = 3;
 
-const SEVERITY_BADGE: Record<Insight["severity"], string> = {
-  critical: "Act now", watch: "Watch", fyi: "FYI",
-};
-const SEVERITY_COLOR: Record<Insight["severity"], string> = {
-  critical: "var(--status-critical)",
-  watch: "var(--status-warning)",
-  fyi: "var(--text-muted)",
-};
-
 /**
- * The verdict, before the numbers. Each line is what happened AND what to do
- * about it — the action text comes straight off the insight, so the summary
- * and the Signals card can never drift apart.
+ * The top of the console: what to DO, not what happened.
+ *
+ * It shows `kind: "move"` insights only — each names a budget, schedule,
+ * creative or audience to change, and carries the money at stake. Status
+ * readings (LTV:CAC, goal attainment, CPA drift) are true and useful but
+ * they are not instructions, so they wait in Signals below. Sorting purely
+ * by severity used to float them above the moves, which turned the first
+ * thing you read back into a status report.
  */
 export function ExecSummary({ insights, periodLabel, clientName }: {
   insights: Insight[]; periodLabel: string; clientName: string;
 }) {
-  const top = insights.slice(0, EXEC_SUMMARY_COUNT);
-  if (!top.length) return null;
-  const critical = top.filter((i) => i.severity === "critical").length;
+  const moves = insights.filter((i) => i.kind === "move" && i.action).slice(0, EXEC_SUMMARY_COUNT);
+  if (!moves.length) return null;
 
   return (
     <div className="card px-5 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
-          {periodLabel}, in {top.length === 1 ? "one line" : `${top.length} lines`}
-          {critical > 0 && (
-            <span style={{ color: "var(--status-critical)" }}> · {critical} need{critical === 1 ? "s" : ""} action</span>
-          )}
-        </span>
-        <ShareSummary insights={top} periodLabel={periodLabel} clientName={clientName} />
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-col">
+          <span className="text-[15px] font-extrabold tracking-tight" style={{ color: "var(--text-primary)" }}>
+            Do this now
+          </span>
+          <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+            {moves.length === 1 ? "One move" : `${moves.length} moves`} the numbers are asking for
+          </span>
+        </div>
+        <ShareSummary insights={moves} periodLabel={periodLabel} clientName={clientName} />
       </div>
-      <div className="mt-2.5 flex flex-col gap-2.5">
-        {top.map((ins, i) => {
-          const color = TONE_COLOR[ins.tone];
-          const sev = SEVERITY_COLOR[ins.severity];
-          const inner = (
-            <>
-              <span className="text-sm leading-relaxed" style={{ color: "var(--text-primary)" }}>
-                <span aria-hidden style={{ color }}>→</span>{" "}
-                <strong className="tabular" style={{ color }}>{ins.metric}</strong>{" "}
-                {ins.text}
+
+      <div className="flex flex-col gap-2">
+        {moves.map((m, i) => {
+          const body = (
+            <div className="flex items-start gap-3.5 rounded-xl px-3.5 py-3 transition-colors"
+              style={{ background: "var(--surface-2)" }}>
+              <span className="tabular flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold"
+                style={{ background: "var(--brand)", color: "#ffffff" }}>
+                {i + 1}
               </span>
-              {ins.action && (
-                <span className="mt-1 flex items-start gap-1.5 text-[12px] font-medium leading-4">
-                  <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
-                    style={{ background: `color-mix(in srgb, ${sev} 14%, transparent)`, color: sev }}>
-                    {SEVERITY_BADGE[ins.severity]}
-                  </span>
-                  <span style={{ color: "var(--text-secondary)" }}>{ins.action}</span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                {/* the instruction leads — the evidence supports it */}
+                <span className="text-[14px] font-bold leading-5" style={{ color: "var(--text-primary)" }}>
+                  {m.action}
                 </span>
+                <span className="text-[12px] leading-5" style={{ color: "var(--text-secondary)" }}>
+                  <strong className="tabular" style={{ color: "var(--text-primary)" }}>{m.metric}</strong>{" "}
+                  {m.text}
+                </span>
+                {m.costOfInaction && (
+                  <span className="text-[11.5px] font-semibold leading-4" style={{ color: "var(--status-critical)" }}>
+                    Leaving it: {m.costOfInaction}
+                  </span>
+                )}
+              </div>
+              {m.link && (
+                <ArrowRight size={14} className="mt-1 shrink-0" style={{ color: "var(--text-muted)" }} aria-hidden />
               )}
-            </>
+            </div>
           );
-          return ins.link ? (
-            <Link key={i} href={ins.link.href} className="flex flex-col rounded-md transition-opacity hover:opacity-80">
-              {inner}
-            </Link>
+          return m.link ? (
+            <Link key={i} href={m.link.href} className="rounded-xl hover:brightness-105">{body}</Link>
           ) : (
-            <div key={i} className="flex flex-col">{inner}</div>
+            <div key={i}>{body}</div>
           );
         })}
       </div>

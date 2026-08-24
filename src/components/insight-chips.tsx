@@ -29,13 +29,15 @@ const SEVERITY_COLOR: Record<InsightSeverity, string> = {
  * tinted icon tile · uppercase kicker · big metric · one-liner.
  * Expands to the full derivation (inputs → formula → link).
  */
-export function InsightChips({ insights, skip = 0 }: {
+export function InsightChips({ insights, exclude = [] }: {
   insights: Insight[];
-  /** how many leading insights the exec summary already showed — don't repeat them */
-  skip?: number;
+  /** categories already shown as moves at the top — never repeat them here */
+  exclude?: string[];
 }) {
   const [open, setOpen] = useState<number | null>(null);
-  const rest = insights.slice(skip);
+  // exclude by identity rather than by count: the moves block filters to
+  // kind==="move", so a positional skip would drop the wrong cards
+  const rest = insights.filter((i) => !exclude.includes(i.category));
   if (!rest.length) return null;
   return (
     <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">

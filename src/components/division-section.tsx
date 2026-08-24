@@ -66,18 +66,17 @@ export function OnlineOfflineCard({ month, online, onlineIsTracked, offline, hre
   );
 }
 
-export function DivisionCards({ divisions, slug, month, isPartial }: {
-  divisions: DivisionRollup[]; slug: string; month: string; isPartial: boolean;
+export function DivisionCards({ divisions, slug, month }: {
+  divisions: DivisionRollup[]; slug: string; month: string;
 }) {
   const totalSpend = divisions.reduce((s, d) => s + d.spend, 0) || 1;
   const totalRevenue = divisions.reduce((s, d) => s + d.revenue, 0) || 1;
-  const periodLabel = isPartial ? "MTD" : monthLabel(month.slice(0, 7));
   const monthParam = month.slice(0, 7);
   return (
     <div className="flex flex-col gap-3">
       {/* split bar */}
       <div className="card p-7 pb-8">
-        <h3 className="mb-3 text-sm font-semibold">Division split ({periodLabel})</h3>
+        <h3 className="mb-3 text-sm font-semibold">Division split</h3>
         <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Spend</div>
         <SegmentBar segments={divisions.map((d) => ({
           label: DIVISION_LABEL[d.division], value: d.spend, color: DIVISION_COLOR[d.division], sub: inrCompact(d.spend),
@@ -104,7 +103,7 @@ export function DivisionCards({ divisions, slug, month, isPartial }: {
             <div className="mb-3 flex items-center gap-2">
               <span className="h-3 w-3 rounded-sm" aria-hidden style={{ background: DIVISION_COLOR[d.division] }} />
               <h3 className="text-sm font-semibold">{DIVISION_LABEL[d.division]}</h3>
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>{d.campaigns} campaigns · {periodLabel}</span>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>{d.campaigns} campaigns</span>
               <span className="ml-auto text-xs underline" style={{ color: "var(--text-muted)" }}>dig in →</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -139,8 +138,8 @@ export function DivisionCards({ divisions, slug, month, isPartial }: {
   );
 }
 
-export function HeroLoserCards({ hero, loser, slug, periodLabel }: {
-  hero: CampaignHighlight | null; loser: CampaignHighlight | null; slug: string; periodLabel: string;
+export function HeroLoserCards({ hero, loser, slug }: {
+  hero: CampaignHighlight | null; loser: CampaignHighlight | null; slug: string;
 }) {
   const card = (c: CampaignHighlight | null, kind: "hero" | "loser") => {
     const color = kind === "hero" ? "var(--status-good)" : "var(--status-critical)";
@@ -154,9 +153,7 @@ export function HeroLoserCards({ hero, loser, slug, periodLabel }: {
           <Icon size={15} strokeWidth={2.4} />
         </span>
         {/* "Loser" was the internal shorthand; this card faces the client */}
-        <h3 className="text-sm font-bold">{kind === "hero" ? "Hero campaign" : "Needs a look"}
-          <span className="ml-1.5 font-medium" style={{ color: "var(--text-muted)" }}>{periodLabel}</span>
-        </h3>
+        <h3 className="text-sm font-bold">{kind === "hero" ? "Hero campaign" : "Needs a look"}</h3>
       </div>
       <div className="p-4">
       {c ? (

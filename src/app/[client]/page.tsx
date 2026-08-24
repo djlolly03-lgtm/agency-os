@@ -233,6 +233,12 @@ export default async function OverviewPage({ params, searchParams }: {
     campaignMonthly, dailyAll: blendedDaily, asOf,
   });
 
+  // the moves the top block will show — Signals excludes these by identity
+  const movesShown = insights
+    .filter((i) => i.kind === "move" && i.action)
+    .slice(0, EXEC_SUMMARY_COUNT)
+    .map((i) => i.category);
+
   // ---- store-revenue view (matches the client's sheet mental model) ----
   let storeTotal: number | null;
   let storeOrders: number | null;
@@ -282,7 +288,7 @@ export default async function OverviewPage({ params, searchParams }: {
   // ---- hero KPI entries ----
   const heroEntries = [
     {
-      label: `${storeTotal != null ? "Revenue" : "Paid revenue"} · ${periodLabel}`,
+      label: storeTotal != null ? "Revenue" : "Paid revenue",
       value: storeTotal ?? mt.revenue, format: "inr-compact" as const, suffix: "",
       delta: revDelta,
       sub: storeTotal != null
@@ -328,7 +334,7 @@ export default async function OverviewPage({ params, searchParams }: {
       },
     },
     {
-      label: `${blendedRoas != null ? "Blended ROAS" : "ROAS"} · ${periodLabel}`,
+      label: blendedRoas != null ? "Blended ROAS" : "ROAS",
       value: blendedRoas ?? mtRoas, format: "ratio" as const, suffix: "×",
       delta: blendedRoas != null ? blendedDelta : (pvRoas > 0 ? mtRoas / pvRoas - 1 : null),
       sub: blendedRoas != null
@@ -355,7 +361,7 @@ export default async function OverviewPage({ params, searchParams }: {
       },
     },
     {
-      label: `Spend · ${periodLabel}`, value: mt.spend, format: "inr-compact" as const, suffix: "",
+      label: "Spend", value: mt.spend, format: "inr-compact" as const, suffix: "",
       delta: null,
       sub: (platformTotals.map((p) => `${p.platform === "meta" ? "Meta" : "Google"} ${pct(p.spend / monthSpendTotal, 0)}`).join(" · ") || "—")
         + (manualGoogleSum ? " · Google from monthly report" : ""),
@@ -406,7 +412,7 @@ export default async function OverviewPage({ params, searchParams }: {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ===== 3-line summary — the verdict, before the numbers ===== */}
+      {/* ===== what to do now, before anything else ===== */}
       <FadeIn>
         <ExecSummary insights={insights} periodLabel={periodLabel} clientName={client.name} />
       </FadeIn>
@@ -543,28 +549,27 @@ export default async function OverviewPage({ params, searchParams }: {
       {/* ===== INSIGHTS (scoped to selection) ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader eyebrow="Signals" title="What the data is telling us"
-          meta="the summary's three, plus everything below them" scope={periodLabel} />
+          meta="context behind the moves — status, trends, seasonality" />
       </FadeIn>
       <FadeIn delay={0.05}>
-        {/* skip the ones already promoted above the hero — they used to render
-            twice on the same page, verbatim */}
-        <InsightChips insights={insights} skip={EXEC_SUMMARY_COUNT} />
+        {/* everything the moves block didn't take — status readings, context */}
+        <InsightChips insights={insights} exclude={movesShown} />
       </FadeIn>
 
       {/* ===== Money flow ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader eyebrow="Money flow" title="Where revenue comes from"
-          meta="online vs offline · divisions · best & worst" scope={periodLabel} />
+          meta="online vs offline · divisions · best & worst" />
       </FadeIn>
       <FadeIn delay={0.05}>
         <OnlineOfflineCard month={dv.month} online={dv.onlineRevenueMtd}
           onlineIsTracked={dv.onlineIsTracked} offline={dv.offlineRevenue} href={`/${slug}/monthly`} />
       </FadeIn>
       <FadeIn delay={0.05}>
-        <DivisionCards divisions={dv.divisions} slug={slug} month={dv.month} isPartial={dv.isPartial} />
+        <DivisionCards divisions={dv.divisions} slug={slug} month={dv.month} />
       </FadeIn>
       <FadeIn delay={0.05}>
-        <HeroLoserCards hero={dv.hero} loser={dv.loser} slug={slug} periodLabel={periodLabel} />
+        <HeroLoserCards hero={dv.hero} loser={dv.loser} slug={slug} />
       </FadeIn>
 
       <div id="channels" style={{ scrollMarginTop: "100px" }} />
@@ -573,7 +578,7 @@ export default async function OverviewPage({ params, searchParams }: {
         <>
           <FadeIn delay={0.05}>
             <SectionHeader eyebrow="Channels" title={duelTitle}
-              meta="winner ticks per metric" scope={periodLabel} />
+              meta="winner ticks per metric" />
           </FadeIn>
           <FadeIn delay={0.05}>
             <ChannelDuel platforms={platformTotals} periodLabel={periodLabel} />
@@ -592,7 +597,7 @@ export default async function OverviewPage({ params, searchParams }: {
       <div id="seasons" style={{ scrollMarginTop: "100px" }} />
       <FadeIn delay={0.05}>
         <SectionHeader eyebrow="Seasons" title="Selling what nature ships"
-          meta="produce windows vs actual sales · India seasons" scope={periodLabel} />
+          meta="produce windows vs actual sales · India seasons" />
       </FadeIn>
       {isMonthMode && (
         <FadeIn delay={0.05}>
@@ -606,7 +611,7 @@ export default async function OverviewPage({ params, searchParams }: {
           summary line, the stage-by-stage detail is one click away. ===== */}
       <FadeIn delay={0.05}>
         <SectionHeader eyebrow="The funnel" title="From impression to purchase"
-          meta="Meta attribution — Google's export has no stage data" scope={periodLabel} />
+          meta="Meta attribution — Google's export has no stage data" />
       </FadeIn>
       <FadeIn delay={0.05}>
         <Collapsible
@@ -637,14 +642,14 @@ export default async function OverviewPage({ params, searchParams }: {
               prev={{ current: ov.today.spend, previous: ov.yesterday.spend }} prevLabel="vs previous day"
             />
             <KpiTile
-              label="Orders MTD" value={num(ov.mtd.purchases)}
+              label="Orders" value={num(ov.mtd.purchases)}
               prev={{ current: ov.mtd.purchases, previous: ov.prevMtd.purchases }} prevLabel="vs last month (same days)"
             />
             <KpiTile
-              label="CPA MTD" value={inr(ov.mtd.cpa)} invert
+              label="CPA" value={inr(ov.mtd.cpa)} invert
               prev={{ current: ov.mtd.cpa, previous: ov.prevMtd.cpa }} prevLabel="vs last month"
             />
-            <KpiTile label="CPM MTD" value={inr(ov.mtd.cpm)} sub={`CPC ${inr(ov.mtd.cpc)}`} />
+            <KpiTile label="CPM" value={inr(ov.mtd.cpm)} sub={`CPC ${inr(ov.mtd.cpc)}`} />
           </div>
         </FadeIn>
       )}
