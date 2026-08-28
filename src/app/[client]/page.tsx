@@ -5,14 +5,16 @@ import {
   getFunnel, getAdRangeRollups, getGoals, getManualGoogleMonth, getMonthlyNameRollups,
   getCustomerEconomics, latestDay, getCampaignMonthly, getDataFreshness,
 } from "@/lib/queries";
-import { getRfmSegments } from "@/lib/shopify";
+import { getRfmSegments, getCohortRetention } from "@/lib/shopify";
+import { CohortRetention } from "@/components/cohort-retention";
 import { getRetentionChannels } from "@/lib/retention";
 import { RetentionChannels } from "@/components/retention-channels";
 import { StaleNotice } from "@/components/stale-notice";
 import { ExecSummary } from "@/components/exec-summary";
 import { Collapsible } from "@/components/collapsible";
 import { CustomerSnapshot } from "@/components/customer-snapshot";
-import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar } from "@/lib/seasons";
+import { PRODUCE, inSeason, classifyProduce, aggregateProduceMonth, seasonRadar, buildSeasonCalendar } from "@/lib/seasons";
+import { SeasonCalendar } from "@/components/season-calendar";
 import { Funnel } from "@/components/funnel";
 import { computeInsights, MOVE_COUNT } from "@/lib/insights";
 import { inr, inrCompact, num, ratio, pct, dayLabel, monthLabel } from "@/lib/format";
@@ -84,11 +86,12 @@ export default async function OverviewPage({ params, searchParams }: {
     getMonthlyNameRollups(client.id),
     getCustomerEconomics(client.id),
   ]);
-  const [rfm, retentionMonths, campaignMonthly, freshness] = await Promise.all([
+  const [rfm, retentionMonths, campaignMonthly, freshness, cohortRetention] = await Promise.all([
     getRfmSegments(client.id),
     getRetentionChannels(client.id),
     getCampaignMonthly(client.id),
     getDataFreshness(client.id),
+    getCohortRetention(client.id),
   ]);
   // blended per-day totals across all history — day-of-week rule
   const blendedByDay = new Map<string, { day: string; spend: number; revenue: number; purchases: number }>();
@@ -218,6 +221,8 @@ export default async function OverviewPage({ params, searchParams }: {
   const inSeasonNow = isMonthMode
     ? PRODUCE.filter((pr) => pr.months.length < 12 && inSeason(pr, monthNum) && historicalKeys.has(pr.key))
     : [];
+  // calendar spans the whole history, independent of the selected month/period
+  const seasonCalendar = buildSeasonCalendar(nameRollups, monthsAsc);
 
   const insights = computeInsights({
     slug, monthLabel: periodLabel, isCurrentMonth: isCurrent, monthParam,
@@ -533,6 +538,11 @@ export default async function OverviewPage({ params, searchParams }: {
       <FadeIn delay={0.05}>
         <CustomerSnapshot months={custMonths} slug={slug} rfm={rfm} />
       </FadeIn>
+      {cohortRetention && cohortRetention.cohorts.length > 1 && (
+        <FadeIn delay={0.05}>
+          <CohortRetention cohorts={cohortRetention.cohorts} maxOffset={cohortRetention.maxOffset} />
+        </FadeIn>
+      )}
 
       {/* ===== Money flow ===== */}
       <FadeIn delay={0.05}>
@@ -549,6 +559,22 @@ export default async function OverviewPage({ params, searchParams }: {
       <FadeIn delay={0.05}>
         <HeroLoserCards hero={dv.hero} loser={dv.loser} slug={slug} />
       </FadeIn>
+
+      {seasonCalendar.length > 0 && (
+        <>
+          <div id="season" style={{ scrollMarginTop: "100px" }} />
+          {/* ===== Seasonal calendar — what sells, and when, across the year.
+              Independent of the month/period picker: this is the planning
+              view, so it always spans full history. ===== */}
+          <FadeIn delay={0.05}>
+            <SectionHeader eyebrow="Seasonal intelligence" title="What sells, and when"
+              meta="revenue by produce item, month by month · plan spend ahead of the window" scope="All time" />
+          </FadeIn>
+          <FadeIn delay={0.05}>
+            <SeasonCalendar rows={seasonCalendar} months={monthsAsc} />
+          </FadeIn>
+        </>
+      )}
 
       <div id="channels" style={{ scrollMarginTop: "100px" }} />
       {/* ===== Channels: Meta vs Google ===== */}
