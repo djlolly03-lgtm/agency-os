@@ -51,6 +51,75 @@ export function RevenueTrend({ points, selected }: {
   );
 }
 
+/**
+ * Revenue vs. paid spend, paired columns per month, ROAS read underneath.
+ *
+ * The verdict sentence on page 01 asserts things like "growth got more
+ * expensive" from a single LTV:CAC comparison — this chart is the evidence
+ * for that claim, not a new one: it lets the reader check whether spend is
+ * outpacing revenue for one month or as a trend, instead of taking the
+ * sentence on faith.
+ */
+export function RevenueSpendTrend({ points, selected }: {
+  points: Array<{ month: string; revenue: number; spend: number }>;
+  selected: string;
+}) {
+  if (points.length < 2) return null;
+  const W = 680, H = 176, pad = 4, valH = 14, labelH = 14, roasH = 13, innerGap = 3, groupGap = 12;
+  const max = Math.max(...points.flatMap((p) => [p.revenue, p.spend]), 1);
+  const plotH = H - valH - labelH - roasH - 4;
+  const n = points.length;
+  const groupW = (W - pad * 2 - groupGap * (n - 1)) / n;
+  const barW = (groupW - innerGap) / 2;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="flex flex-wrap gap-3">
+        {[{ label: "Revenue", color: "var(--brand)" }, { label: "Paid spend", color: "var(--brand-accent)" }].map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: "var(--text-secondary)" }}>
+            <span aria-hidden style={{ width: 9, height: 9, borderRadius: 2, background: s.color, display: "inline-block" }} />
+            {s.label}
+          </span>
+        ))}
+      </span>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img"
+        aria-label="Revenue versus paid spend by month, with ROAS">
+        {points.map((p, i) => {
+          const gx = pad + i * (groupW + groupGap);
+          const isSel = p.month === selected;
+          const revH = Math.max(3, (p.revenue / max) * plotH);
+          const spendH = Math.max(3, (p.spend / max) * plotH);
+          const roas = p.spend > 0 ? p.revenue / p.spend : null;
+          return (
+            <g key={p.month}>
+              {isSel && (
+                <text x={gx + groupW / 2} y={valH - 3} textAnchor="middle" fontSize="9.5" fontWeight="800"
+                  className="tabular" style={{ ...TXT, fill: "var(--brand)" }}>
+                  {inrShort(p.revenue)}
+                </text>
+              )}
+              <rect x={gx} y={valH + (plotH - revH)} width={barW} height={revH} rx="3"
+                style={{ fill: "var(--brand)", opacity: isSel ? 1 : 0.55 }} />
+              <rect x={gx + barW + innerGap} y={valH + (plotH - spendH)} width={barW} height={spendH} rx="3"
+                style={{ fill: "var(--brand-accent)", opacity: isSel ? 1 : 0.55 }} />
+              <text x={gx + groupW / 2} y={valH + plotH + labelH - 3} textAnchor="middle" fontSize="8.5" fontWeight="700"
+                style={{ ...TXT, fill: isSel ? "var(--text-primary)" : "var(--text-muted)" }}>
+                {shortMonth(p.month).toUpperCase()}
+              </text>
+              {roas != null && (
+                <text x={gx + groupW / 2} y={valH + plotH + labelH + roasH - 2} textAnchor="middle" fontSize="8.5" fontWeight="800"
+                  className="tabular" style={{ ...TXT, fill: isSel ? "var(--brand)" : "var(--text-muted)" }}>
+                  {roas.toFixed(1)}×
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 /** Proper waterfall: start column, floating deltas, end column. */
 export function Waterfall({ start, steps, end }: {
   start: { label: string; value: number };

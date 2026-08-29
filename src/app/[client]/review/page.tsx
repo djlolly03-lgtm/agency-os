@@ -20,7 +20,7 @@ import { PrintButton } from "@/components/print-button";
 import { CommitmentsEditor, CommitmentCheckins } from "@/components/commitments";
 import { parseCommitments } from "@/lib/commitments";
 import { monthEndDay, shortMonth } from "@/lib/periods";
-import { RevenueTrend, Waterfall, HCompare, ColumnChart, SegmentBar } from "@/components/review-charts";
+import { RevenueTrend, RevenueSpendTrend, Waterfall, HCompare, ColumnChart, SegmentBar } from "@/components/review-charts";
 
 /**
  * The monthly review as a DECISION MEMO — not a stats report. Structure:
@@ -213,6 +213,14 @@ export default async function ReviewPage({ params, searchParams }: {
   const trendPoints = report.slice(-10).map((r) => ({
     month: r.month, value: r.totalRevenue ?? (r.meta.revenue + r.google.revenue),
   }));
+  // same window, paired with paid spend — the evidence behind the verdict's
+  // efficiency clause ("growth got more expensive"), so it's checkable
+  // month by month instead of asserted from one LTV:CAC comparison
+  const revSpendPoints = report.slice(-10).map((r) => ({
+    month: r.month,
+    revenue: r.totalRevenue ?? (r.meta.revenue + r.google.revenue),
+    spend: r.meta.spend + r.google.spend,
+  }));
 
   // ---- creative concentration: top assets by month spend, with age ----
   const adSpendTotal = adRollups.reduce((s, a) => s + a.spend, 0);
@@ -371,6 +379,18 @@ export default async function ReviewPage({ params, searchParams }: {
               The last {trendPoints.length} months · {mLabel} highlighted
             </div>
             <RevenueTrend points={trendPoints} selected={month} />
+          </div>
+        )}
+
+        {/* revenue vs. paid spend — the check on the verdict's efficiency
+            clause above: is spend outrunning revenue for one month, or as
+            a trend? ROAS underneath each pair answers it directly. */}
+        {revSpendPoints.length > 2 && (
+          <div className="mt-6 flex flex-col gap-2">
+            <div className="text-[11px] font-extrabold uppercase tracking-[0.16em]">
+              Revenue vs. paid spend · ROAS underneath
+            </div>
+            <RevenueSpendTrend points={revSpendPoints} selected={month} />
           </div>
         )}
 
