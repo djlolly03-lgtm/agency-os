@@ -6,6 +6,7 @@ import { CinemaBanner, BannerStat } from "@/components/hero-cinema";
 import { SectionHeader } from "@/components/section-header";
 import { CreativeCard, toneFor } from "@/components/creative-card";
 import { FadeIn } from "@/components/motion";
+import { MapPin, Package, Table2 } from "lucide-react";
 
 const STATUS_ORDER: CreativeStatus[] = ["winner", "hidden_gem", "fatiguing", "losing", "testing", "average"];
 
@@ -88,6 +89,22 @@ export default async function CreativesPage({
           <BannerStat label="Fix or kill" value={String(bleed.length)} sub="fatiguing + losing" />
         </>}
       />
+
+      {/* the rest of the library */}
+      <div className="flex flex-wrap gap-2">
+        <Link href={`/${slug}/monthly`} className="flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold"
+          style={{ borderColor: "var(--border-hairline)" }}>
+          <Table2 size={13} /> Monthly report
+        </Link>
+        <Link href={`/${slug}/geography`} className="flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold"
+          style={{ borderColor: "var(--border-hairline)" }}>
+          <MapPin size={13} /> Geography — pincode &amp; city
+        </Link>
+        <Link href={`/${slug}/products`} className="flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold"
+          style={{ borderColor: "var(--border-hairline)" }}>
+          <Package size={13} /> Product performance
+        </Link>
+      </div>
 
       {/* controls */}
       <div className="flex flex-wrap items-center justify-between gap-2">

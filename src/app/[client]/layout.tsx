@@ -14,7 +14,7 @@ import { SyncChip } from "@/components/sync-chip";
 const NAV = [
   { href: "", label: "Today" },
   { href: "/review", label: "Review" },
-  { href: "/creatives", label: "Library", also: ["/campaigns", "/monthly", "/divisions"] },
+  { href: "/creatives", label: "Library", also: ["/campaigns", "/monthly", "/divisions", "/geography", "/products"] },
   { href: "/internal", label: "Setup" },
 ];
 
