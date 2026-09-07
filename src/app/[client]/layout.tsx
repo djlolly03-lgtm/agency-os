@@ -5,14 +5,18 @@ import { Nav } from "@/components/nav";
 import { SyncChip } from "@/components/sync-chip";
 
 /**
- * Four tabs, one job each: what needs me now, the client document, the
- * drill-down library, and the plumbing. Platforms was cut (it duplicated
- * the Overview's channel comparison on a near-empty page); the monthly
- * table stays reachable from the Explain panels that link to it, just not
- * as a top-level destination.
+ * Five tabs, one job each: what needs me now, the boardroom screen-share,
+ * the client document, the drill-down library, and the plumbing. Snapshot
+ * exists because Today is deliberately depth-first (case files, reasoning)
+ * and that's the wrong shape for a live call — someone needs six numbers
+ * and a chart in ten seconds, not an explanation. Platforms was cut (it
+ * duplicated the Overview's channel comparison on a near-empty page); the
+ * monthly table stays reachable from the Explain panels that link to it,
+ * just not as a top-level destination.
  */
 const NAV = [
   { href: "", label: "Today" },
+  { href: "/snapshot", label: "Snapshot" },
   { href: "/review", label: "Review" },
   { href: "/creatives", label: "Library", also: ["/campaigns", "/monthly", "/divisions", "/geography", "/products"] },
   { href: "/internal", label: "Setup" },

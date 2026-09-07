@@ -5,6 +5,29 @@ and how much effort it takes. Priority order.
 
 ---
 
+## Who to ask — from the team's Scope of Work sheet (4 Sep)
+
+Routing for open items below, mapped to the internal scope owners:
+
+| Open item | Scope area | Lead 1 | Lead 2 |
+| --- | --- | --- | --- |
+| WhatsApp spend/revenue/orders (still nothing on the dashboard) | Retention Marketing | Anuya | Nidhi |
+| Website vs. app channel/source flag on orders | Ecom - Quick Comm Management | Ishani (Consultant) | Anuya/Tanvi |
+| Product-level order line items (acquisition-by-product, product-level refunds) | Ecom - Quick Comm Management | Ishani (Consultant) | Anuya/Tanvi |
+| Exact order timestamps (best time-of-day) | Ecom - Quick Comm Management | Ishani (Consultant) | Anuya/Tanvi |
+| Delivery pincode/city, phone/address on orders | Ecom - Quick Comm Management | Ishani (Consultant) | Anuya/Tanvi |
+| Refresh cadence (weekly vs monthly export) — #17, BLOCKING | Ecom - Quick Comm + Client Servicing sign-off | Ishani | Sandeep |
+| Ad-ID columns, engagement columns on Meta/Google exports | Paid Campaigns Management | Suyog (Consultant) | Nidhi |
+| Season windows sign-off (recurring quarterly check-in) | Creative Development | Kashish (Eightsense) | Nitigya |
+| Approvals / client-facing asks | Client Servicing | Sandeep | Anuya/Tanvi |
+
+In practice: **Ishani** owns almost everything export-related (she runs Ecom - Quick
+Comm, where the Shopify/order-data plumbing lives), **Anuya/Nidhi** for WhatsApp
+specifically, and **Sandeep** if an ask needs to go through him to the client rather
+than being pulled internally.
+
+---
+
 ## P1 — High value, minutes of effort
 
 ### 1. Monthly customer counts (new vs returning) — ✅ RECEIVED (3 Aug)
