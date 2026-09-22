@@ -1,17 +1,20 @@
 /**
- * Retention-channel metrics (WhatsApp remarketing + email marketing) from
- * the customer-data sheet, tab "8. Retention". One row per month:
+ * Retention-channel metrics (WhatsApp remarketing + email marketing).
+ * Sheet-tab ingestion below still targets the customer-data sheet, tab
+ * "8. Retention" (still unbuilt on the client's side) — Month | WhatsApp
+ * spend | WhatsApp revenue | WhatsApp orders | Emails sent | Email open rate.
  *
- *   Month | WhatsApp spend | WhatsApp revenue | WhatsApp orders | Emails sent | Email open rate
+ * In practice both channels currently arrive as one-time offline exports
+ * instead (scripts/seed_offline_data.ts): Shopify's own email-marketing
+ * export covers email_sent/email_open_rate, and a WhatsApp campaign-level
+ * send log covers wa_revenue/wa_sent/wa_open_rate. Neither export carries
+ * WhatsApp spend or order count, so wa_spend/wa_orders — and the ROAS they'd
+ * produce — stay null until that lands, from either export.
  *
- * Values land in manual_actuals (wa_spend, wa_revenue, wa_orders,
- * email_sent, email_open_rate) — the same table every other client-reported
- * monthly uses, so nothing downstream needs a new source.
- *
- * The tab doesn't exist yet — these numbers currently live only in the
- * monthly review deck (July: ₹20.5k spend → ₹3.89L revenue, 342 orders,
- * 18.97× ROAS). Ingestion no-ops gracefully until the team adds the tab;
- * the exact format is documented in DATA-REQUESTS.md.
+ * All of it lands in manual_actuals (wa_spend, wa_revenue, wa_orders,
+ * wa_sent, wa_open_rate, email_sent, email_open_rate) — the same table
+ * every other client-reported monthly uses, so nothing downstream needs a
+ * new source. Format for the sheet-tab path documented in DATA-REQUESTS.md.
  */
 import { getDb } from "./db";
 import { sheetsClient } from "./google";
@@ -112,6 +115,8 @@ export interface RetentionMonth {
   waSpend: number | null;
   waRevenue: number | null;
   waOrders: number | null;
+  waSent: number | null;
+  waOpenRate: number | null;      // percentage, e.g. 72.5
   emailSent: number | null;
   emailOpenRate: number | null;   // percentage, e.g. 25.63
   waRoas: number | null;
@@ -123,7 +128,8 @@ export async function getRetentionChannels(clientId: string): Promise<RetentionM
   const rows = await db.query<{ month: string; metric: string; value: number }>(
     `select month::text as month, metric, value from manual_actuals
      where client_id = $1
-       and metric in ('wa_spend','wa_revenue','wa_orders','email_sent','email_open_rate')`,
+       and metric in ('wa_spend','wa_revenue','wa_orders','wa_sent','wa_open_rate',
+                       'email_sent','email_open_rate')`,
     [clientId]);
   const byMonth = new Map<string, Map<string, number>>();
   for (const r of rows) {
@@ -137,6 +143,8 @@ export async function getRetentionChannels(clientId: string): Promise<RetentionM
       month,
       waSpend, waRevenue,
       waOrders: m.get("wa_orders") ?? null,
+      waSent: m.get("wa_sent") ?? null,
+      waOpenRate: m.get("wa_open_rate") ?? null,
       emailSent: m.get("email_sent") ?? null,
       emailOpenRate: m.get("email_open_rate") ?? null,
       waRoas: waSpend != null && waSpend > 0 && waRevenue != null ? waRevenue / waSpend : null,

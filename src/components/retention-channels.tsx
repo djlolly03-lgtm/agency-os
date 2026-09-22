@@ -39,6 +39,9 @@ export function RetentionChannels({ rows, paidRoas, selectedMonth }: {
 
   const mLabel = monthLabel(row.month.slice(0, 7));
   const multiple = row.waRoas != null && paidRoas != null && paidRoas > 0 ? row.waRoas / paidRoas : null;
+  // No spend in the export we currently get, so no ROAS — lead with revenue
+  // and the send/open numbers instead of a blank "—×" headline.
+  const hasRoas = row.waRoas != null;
 
   return (
     <div className="card p-5">
@@ -53,28 +56,39 @@ export function RetentionChannels({ rows, paidRoas, selectedMonth }: {
         <Explain block math={{
           title: `WhatsApp remarketing · ${mLabel}`,
           steps: [
-            { label: "Spend (tools + campaigns)", value: row.waSpend != null ? inrCompact(row.waSpend) : "—" },
+            { label: "Spend (tools + campaigns)", value: row.waSpend != null ? inrCompact(row.waSpend) : "not in the current export" },
             { label: "Revenue attributed", value: row.waRevenue != null ? inrCompact(row.waRevenue) : "—" },
             ...(row.waOrders != null ? [{ label: "Orders", value: num(row.waOrders) }] : []),
+            ...(row.waSent != null ? [{ label: "Messages sent", value: num(row.waSent) }] : []),
+            ...(row.waOpenRate != null ? [{ label: "Open rate", value: pct(row.waOpenRate / 100) }] : []),
             ...(paidRoas != null ? [{ label: "Paid-ads ROAS, same period", value: `${ratio(paidRoas)}×` }] : []),
           ],
-          formula: row.waRoas != null && row.waSpend != null && row.waRevenue != null
-            ? `ROAS = ${inrCompact(row.waRevenue)} ÷ ${inrCompact(row.waSpend)} = ${ratio(row.waRoas)}×`
-            : "ROAS = revenue ÷ spend",
+          formula: hasRoas
+            ? `ROAS = ${inrCompact(row.waRevenue!)} ÷ ${inrCompact(row.waSpend!)} = ${ratio(row.waRoas!)}×`
+            : "ROAS needs spend — the campaign-level export we get today has revenue and sends, not cost",
           note: "Re-engaging existing customers and abandoned carts. High ROAS is expected here — the audience already knows the brand — but the scale of the gap vs paid is the point.",
-          source: "Client-reported monthly retention tab · Sheets → Supabase",
+          source: "WhatsApp campaign send log (offline export) · CSV → Supabase",
         }}>
           <div className="flex items-center gap-2 text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
             <MessageCircle size={14} style={{ color: "var(--brand)" }} /> WhatsApp remarketing
           </div>
           <div className="mt-1 text-3xl font-bold tabular num-gradient">
-            {row.waRoas != null ? `${ratio(row.waRoas)}×` : "—"}
+            {hasRoas ? `${ratio(row.waRoas!)}×`
+              : row.waRevenue != null ? inrCompact(row.waRevenue) : "—"}
           </div>
           <div className="mt-1 text-xs tabular" style={{ color: "var(--text-secondary)" }}>
-            {row.waSpend != null ? inrCompact(row.waSpend) : "—"} spend ·{" "}
-            {row.waRevenue != null ? inrCompact(row.waRevenue) : "—"} revenue
-            {row.waOrders != null ? ` · ${num(row.waOrders)} orders` : ""}
+            {hasRoas ? (
+              <>{inrCompact(row.waSpend!)} spend · {inrCompact(row.waRevenue!)} revenue{row.waOrders != null ? ` · ${num(row.waOrders)} orders` : ""}</>
+            ) : (
+              <>revenue · {row.waSent != null ? `${num(row.waSent)} sent` : "—"}
+                {row.waOpenRate != null ? ` · ${pct(row.waOpenRate / 100)} opened` : ""}</>
+            )}
           </div>
+          {!hasRoas && (
+            <div className="mt-1 text-[10.5px]" style={{ color: "var(--text-muted)" }}>
+              Spend not in this export — ROAS pending
+            </div>
+          )}
         </Explain>
         {/* Email */}
         <div className="rounded-xl border px-4 py-3" style={{ borderColor: "var(--border-hairline)" }}>

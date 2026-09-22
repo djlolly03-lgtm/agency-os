@@ -1,11 +1,11 @@
 /**
  * Import the client-team's offline CSV drop (Sep 2026) — pincode orders,
- * product-level new-vs-returning mix, product-level sales/reversals, and
- * Shopify's email marketing engagement. NOT part of the nightly sync: these
- * are one-time exports from the client's own Shopify admin, dropped in
- * ../DATA - OFFLINE/. Re-run this script whenever the client sends fresher
- * files — it deletes and reinserts each client's rows wholesale, same
- * pattern as scripts/seed.ts.
+ * product-level new-vs-returning mix, product-level sales/reversals,
+ * Shopify's email marketing engagement, and WhatsApp retention performance.
+ * NOT part of the nightly sync: these are one-time exports from the
+ * client's own Shopify admin / WhatsApp tool, dropped in ../DATA - OFFLINE/.
+ * Re-run this script whenever the client sends fresher files — it deletes
+ * and reinserts each client's rows wholesale, same pattern as scripts/seed.ts.
  *
  * Deliberately skips "App Orders Data" (Mixpanel export): only 37 events
  * across 3 of the 10 months, and its "order_id" field is actually a
@@ -170,6 +170,56 @@ async function main() {
     }
   }
   console.log(`  ${emailCount} monthly metric rows`);
+
+  // ---- WhatsApp retention performance — the other half of the "8.
+  // Retention" pipeline; the Shopify email export above only ever carried
+  // email. Per-campaign send log, aggregated to the same manual_actuals
+  // monthly grain (wa_revenue, wa_sent, wa_open_rate). No spend or order
+  // count anywhere in this export, so wa_spend/wa_orders stay unset and the
+  // ROAS card falls back to a revenue-led read until spend lands separately.
+  console.log("Seeding WhatsApp retention performance…");
+  const waRows = parseCsv("WhatsApp Retention Performance - Apr'26 to Aug'26.csv");
+  // 13–31 Aug ships every campaign with Opened/CTR/Revenue all exactly 0
+  // across 9 consecutive sends, despite realistic Sent volumes (1.5k–7.5k)
+  // and every earlier week showing normal 47–83% open-rate variance — that
+  // pattern reads as "results not synced back yet" for this export's cutoff,
+  // not as nine campaigns that genuinely fell to zero. Excluded from the
+  // monthly rollup rather than counted as real zeros; re-run this script
+  // once the client re-exports with that stretch filled in.
+  const UNREPORTED_FROM = "2026-08-13", UNREPORTED_TO = "2026-08-31";
+  const byMonthWa = new Map<string, { revenue: number; sent: number; openedWeighted: number }>();
+  let waSkipped = 0;
+  for (const r of waRows) {
+    const date = r["Date"];
+    if (!date) continue;
+    if (date >= UNREPORTED_FROM && date <= UNREPORTED_TO) { waSkipped++; continue; }
+    const month = date.slice(0, 7) + "-01";
+    const sent = num(r["Sent"]) ?? 0;
+    const revenue = num(r["Revenue"]) ?? 0;
+    const openRate = num(r["Opened"]) ?? 0; // fraction, e.g. 0.725
+    const e = byMonthWa.get(month) ?? { revenue: 0, sent: 0, openedWeighted: 0 };
+    e.revenue += revenue; e.sent += sent; e.openedWeighted += openRate * sent;
+    byMonthWa.set(month, e);
+  }
+  let waCount = 0;
+  for (const [month, e] of byMonthWa) {
+    const entries: Array<[string, number | null]> = [
+      ["wa_revenue", e.revenue],
+      ["wa_sent", e.sent],
+      ["wa_open_rate", e.sent > 0 ? (e.openedWeighted / e.sent) * 100 : null],
+    ];
+    for (const [metric, value] of entries) {
+      if (value == null) continue;
+      await db.query(
+        `insert into manual_actuals (client_id, month, metric, value, source)
+         values ($1,$2,$3,$4,'offline_whatsapp_export')
+         on conflict (client_id, month, metric) do update
+           set value = excluded.value, source = excluded.source, updated_at = now()`,
+        [clientId, month, metric, value]);
+      waCount++;
+    }
+  }
+  console.log(`  ${waCount} monthly metric rows (${waSkipped} unreported-tail rows skipped)`);
 
   console.log("\n=== Verification: top 10 pincodes by total orders ===");
   console.table(await db.query(
